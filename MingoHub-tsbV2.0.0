@@ -1017,7 +1017,11 @@ local function onLiveChildAdded(child)
 
     if isLocal then
         if dashEventSet[name] and Settings.Rage.SideDashAssist.Enabled then
-            task.spawn(function() State.SDA and State.SDA.run and State.SDA.run(child) end)
+            task.spawn(function()
+                if State.SDA and State.SDA.run then
+                    State.SDA.run(child)
+                end
+            end)
         end
         if name == "Freeze" and Settings.Rage.NoStun then
             task.defer(child.Destroy, child)
