@@ -3374,17 +3374,89 @@ local function sanitize(name)
     return name
 end
 
-local function deepCopy(t)
-    local out = {}
-    for k, v in pairs(t) do out[k] = type(v) == "table" and deepCopy(v) or v end
-    return out
+local CONFIG_TYPE_TAG = "__mingohub_type"
+
+-- Convert Roblox datatypes to JSON-safe tagged tables before encoding.
+local function encodeConfigValue(value, seen)
+    local kind = typeof(value)
+
+    if kind == "Color3" then
+        return {
+            [CONFIG_TYPE_TAG] = "Color3",
+            r = value.R,
+            g = value.G,
+            b = value.B,
+        }
+    elseif kind == "EnumItem" then
+        local enumType = tostring(value.EnumType):match("^Enum%.(.+)$")
+        if not enumType then
+            error("Unsupported EnumItem type: " .. tostring(value.EnumType))
+        end
+        return {
+            [CONFIG_TYPE_TAG] = "EnumItem",
+            enumType = enumType,
+            name = value.Name,
+        }
+    end
+
+    if type(value) ~= "table" then
+        return value
+    end
+
+    seen = seen or {}
+    if seen[value] then error("Cyclic table in configuration") end
+    seen[value] = true
+
+    local result = {}
+    for key, item in pairs(value) do
+        local keyType = type(key)
+        if keyType ~= "string" and keyType ~= "number" then
+            error("Unsupported configuration key type: " .. keyType)
+        end
+        result[key] = encodeConfigValue(item, seen)
+    end
+
+    seen[value] = nil
+    return result
 end
-local function deepApply(dst, src)
+
+-- Rehydrate tagged values after JSONDecode. Unknown tags are left untouched
+-- so malformed or future-version entries are ignored by deepApply.
+local function decodeConfigValue(value)
+    if type(value) ~= "table" then return value end
+
+    local tag = value[CONFIG_TYPE_TAG]
+    if tag == "Color3" then
+        local r = math.clamp(tonumber(value.r) or 0, 0, 1)
+        local g = math.clamp(tonumber(value.g) or 0, 0, 1)
+        local b = math.clamp(tonumber(value.b) or 0, 0, 1)
+        return Color3.new(r, g, b)
+    elseif tag == "EnumItem" then
+        local enumTypeName = tostring(value.enumType or "")
+        local itemName = tostring(value.name or "")
+        local enumType = Enum[enumTypeName]
+        if enumType and itemName ~= "" then
+            local ok, item = pcall(function() return enumType[itemName] end)
+            if ok and item then return item end
+        end
+        return nil
+    end
+
+    local result = {}
+    for key, item in pairs(value) do
+        result[key] = decodeConfigValue(item)
+    end
+    return result
+end
+
+local function deepApply(dst, src, allowNil)
     for k, v in pairs(src) do
         local cur = dst[k]
         if type(cur) == "table" and type(v) == "table" then
-            deepApply(cur, v)
+            deepApply(cur, v, allowNil and allowNil[k])
         elseif cur ~= nil and type(v) == type(cur) then
+            dst[k] = v
+        elseif cur == nil and allowNil and allowNil[k] then
             dst[k] = v
         end
     end
@@ -3418,11 +3490,11 @@ local function listConfigs()
 end
 
 local function collectConfig()
-    local s = deepCopy(Settings)
-    if s.Macros and s.Macros.Backdash and s.Macros.Backdash.Keys then
-        for i, k in ipairs(s.Macros.Backdash.Keys) do s.Macros.Backdash.Keys[i] = k and k.Name or nil end
-    end
-    return { version = VERSION, settings = s, appearance = deepCopy(Appearance) }
+    return {
+        version = VERSION,
+        settings = encodeConfigValue(Settings),
+        appearance = encodeConfigValue(Appearance),
+    }
 end
 
 local function applyRGB(dst, src)
@@ -3442,20 +3514,44 @@ local applyAppearanceRef
 
 local function applyConfigTable(data)
     if type(data) ~= "table" then return false end
-    if type(data.settings) == "table" then
+    local decodedSettings = type(data.settings) == "table" and decodeConfigValue(data.settings) or nil
+    if type(decodedSettings) == "table" then
+        -- These are valid optional fields whose defaults are nil. Keep the
+        -- allow-list narrow so unknown JSON keys cannot be injected into Settings.
+        local allowNilFields = {
+            Player = {
+                CustomFrontDash = { Key = true },
+                CustomSideDash = { Key = true },
+                LockOn = { Keybind = true },
+                Magnet = { Keybind = true },
+            },
+            Macros = {
+                TrueM1Reset = { Key = true },
+                EmoteDash = { Key = true },
+                TechHelper = { Key = true },
+            },
+        }
+
         for group, values in pairs(Settings) do
-            if type(values) == "table" and type(data.settings[group]) == "table" then
-                deepApply(values, data.settings[group])
+            if type(values) == "table" and type(decodedSettings[group]) == "table" then
+                deepApply(values, decodedSettings[group], allowNilFields[group])
             end
         end
-        if data.settings.Macros and data.settings.Macros.Backdash and type(data.settings.Macros.Backdash.Keys) == "table" then
-            for i, k in ipairs(data.settings.Macros.Backdash.Keys) do
-                if type(k) == "string" then Settings.Macros.Backdash.Keys[i] = Enum.KeyCode[k] end
+
+        -- Backward compatibility with older configs that stored Backdash keys
+        -- as plain Enum.KeyCode names.
+        local oldKeys = data.settings and data.settings.Macros
+            and data.settings.Macros.Backdash and data.settings.Macros.Backdash.Keys
+        if type(oldKeys) == "table" then
+            for i, keyName in ipairs(oldKeys) do
+                if type(keyName) == "string" and Enum.KeyCode[keyName] then
+                    Settings.Macros.Backdash.Keys[i] = Enum.KeyCode[keyName]
+                end
             end
         end
     end
     if type(data.appearance) == "table" then
-        local ap = data.appearance
+        local ap = decodeConfigValue(data.appearance)
         if type(ap.Background) == "string" then Appearance.Background = ap.Background end
         if type(ap.Blur) == "boolean" then Appearance.Blur = ap.Blur end
         if type(ap.EdgeGlow) == "boolean" then Appearance.EdgeGlow = ap.EdgeGlow end
@@ -5182,7 +5278,16 @@ local nameBox = addTextbox(miscTab, "Config Name", "Name used when saving", "def
 addButton(miscTab, "Save Config", "Save current settings", function()
     local n = sanitize(nameBox.Text)
     if not n then notify("Enter a config name first") return end
-    writeText(configPath(n), HttpService:JSONEncode(collectConfig()))
+
+    local ok, encoded = pcall(function()
+        return HttpService:JSONEncode(collectConfig())
+    end)
+    if not ok then
+        notify("Save failed: " .. tostring(encoded))
+        return
+    end
+
+    writeText(configPath(n), encoded)
     notify("Saved: " .. n)
 end, "Save")
 local loadNameBox = addTextbox(miscTab, "Load Name", "Name to load", "default")
