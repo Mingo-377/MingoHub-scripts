@@ -253,8 +253,8 @@ local Character, Humanoid, RootPart, HeadPart, Communicate, Animator
 local charName = ""
 local blockActive   = false
 local dashOnCooldown = false
-local lockRotating  = false   -- replaces _mzv8k
-local dashOnCD      = false   -- replaces _ecSEyI
+local lockRotating  = false
+local dashOnCD      = false
 
 -- ─────────────────────────── Connection management ───────────────
 local ActiveConnections   = {}
@@ -295,7 +295,7 @@ local function unbindRender(name)
 end
 
 -- ─────────────────────────── Player relationship state ───────────
-local PlayerFrames = {}  -- name → "Neutral" | "Friend" | "Enemy"
+local PlayerFrames = {}
 
 local function isFriend(plr, respectCheck)
     if not plr or not plr.Name then return false end
@@ -346,7 +346,6 @@ local AnimIds = {
     backDash   = "10491993682",
 }
 
--- M1 animation IDs for animator-based autoblock
 local M1AnimIds = buildSet({
     "10469493270","10469630950","10469639222","10469643643",
     "14004222985","13997092940","14001963401","14136436157",
@@ -537,7 +536,6 @@ local function smoothRotateCamToPos(targetPos, duration)
     end)
 end
 
--- ─────────────────────────── Character rotate easing (autoblock) ─
 local function characterRotateEasing(targetPart, targetHum, duration)
     duration = duration or 0
     local conn
@@ -569,7 +567,6 @@ local function stopRotate(conn)
     if Humanoid then Humanoid.AutoRotate = true end
 end
 
--- ─────────────────────────── Target part resolution ──────────────
 local function getTargetPart(hrp)
     local setting = Settings.AutoTech.TargetPart
     local parent  = hrp and hrp.Parent
@@ -586,7 +583,6 @@ local function getTargetPos(hrp)
     return p and p.Position or Vector3.zero
 end
 
--- ─────────────────────────── isAbove check ───────────────────────
 local function isTargetAbove(targetHRP)
     local myPos  = RootPart.Position
     local tgtPos = targetHRP.Position
@@ -594,7 +590,6 @@ local function isTargetAbove(targetHRP)
     return hDist <= 0.2 and myPos.Y < tgtPos.Y
 end
 
--- ─────────────────────────── Animator check ──────────────────────
 local function isAnimPlaying(animId, hum)
     local anim = hum and (hum:FindFirstChildOfClass("Animator") or hum:FindFirstChild("Animator"))
               or Animator
@@ -606,7 +601,6 @@ local function isAnimPlaying(animId, hum)
     return false
 end
 
--- ─────────────────────────── All-clear checks ────────────────────
 local function localClear()
     if not Character then return false end
     for _, c in ipairs(Character:GetChildren()) do
@@ -635,7 +629,6 @@ local function charIsRagdolled()
     return false
 end
 
--- ─────────────────────────── Dash helper ──────────────────────────
 local function canFrontDash()
     if noDashCooldownActive() then return true end
     if not dashOnCD then return true end
@@ -670,7 +663,6 @@ local function performDashWithDelay(extraDelay)
     task.wait(getPing(1000) + 0.05 + (extraDelay or 0))
 end
 
--- ─────────────────────────── VIM helpers ─────────────────────────
 local function pressKey(kc)   pcall(function() VIM:SendKeyEvent(true,  kc, false, game) end) end
 local function releaseKey(kc) pcall(function() VIM:SendKeyEvent(false, kc, false, game) end) end
 local function tapKey(kc)
@@ -709,7 +701,6 @@ local function simulateM1Click(numKey)
     end
 end
 
--- ─────────────────────────── Block state machine ─────────────────
 local blockState = { active = false, untilT = 0, session = nil }
 local blockRotateConn = nil
 
@@ -764,7 +755,6 @@ local function holdBlock(duration, targetHRP, targetHum)
     return true
 end
 
--- ─────────────────────────── Auto counter / M1 punish ────────────
 local function findCounterTool()
     local bp = player:FindFirstChild("Backpack")
     local ch = Character
@@ -810,7 +800,6 @@ local function tryM1Punish(hrp, hum)
     disconnectConn(charConn)
 end
 
--- ─────────────────────────── Velocity guard ───────────────────────
 local function dashVelocityToward(hrp)
     if not (hrp and RootPart) then return false end
     local vel = hrp.AssemblyLinearVelocity
@@ -820,7 +809,6 @@ local function dashVelocityToward(hrp)
     return vel.Unit:Dot(toMe.Unit) > 0.7
 end
 
--- ─────────────────────────── FOV check ───────────────────────────
 local function inFOV(hrp)
     local fov = Settings.Autoblock.FOV or 360
     if fov >= 360 then return true end
@@ -834,7 +822,6 @@ local function inFOV(hrp)
     return angle <= fov / 2
 end
 
--- ─────────────────────────── State.AB: Animator-based autoblock ──
 local State = {}
 State.AB = {
     lastM1  = setmetatable({}, { __mode = "k" }),
@@ -1010,7 +997,6 @@ if liveFolder then
     connectSignal(liveFolder.ChildAdded, State.AB.hook)
 end
 
--- ─────────────────────────── onLiveChildAdded event handler ──────
 local function onLiveChildAdded(child)
     if not child then return end
     local name = child.Name
@@ -1081,7 +1067,6 @@ local function onLiveChildAdded(child)
     end
 end
 
--- ─────────────────────────── Target finder for AutoTech ──────────
 local function findBestTarget(maxDist)
     maxDist = maxDist or 16
     if not (Character and RootPart) then return nil end
@@ -1115,7 +1100,6 @@ local function findBestTarget(maxDist)
     return best
 end
 
--- ─────────────────────────── Ragdoll watcher ──────────────────────
 local function ragdollWatch(method, duration, targetChar, targetHum, callback)
     local conn
     conn = RunService[method]:Connect(function()
@@ -1135,7 +1119,6 @@ local function ragdollWatch(method, duration, targetChar, targetHum, callback)
     lockRotating = false
 end
 
--- ─────────────────────────── Auto Tech handlers ───────────────────
 local function doTechSupa(targetChar, hrp, hum, missChance)
     performDashWithDelay()
     local offset = hrp.CFrame:PointToObjectSpace(RootPart.Position)
@@ -1284,7 +1267,6 @@ local TECH_HANDLERS = {
     ["Custom Dash v2"]= doTechCustomDashV2,
 }
 
--- ─────────────────────────── AutoLethal ───────────────────────────
 local LethalState = { busy = false, armedUntil = 0, highlight = nil }
 
 LethalState.getTarget = function(maxDist)
@@ -1431,7 +1413,6 @@ LethalState.fire = function()
     end
 end
 
--- ─────────────────────────── Magnet ──────────────────────────────
 local MagnetState = { conn = nil, startTime = 0, duration = 0.5, strength = 50, smoothness = 0.65, targetOverride = nil }
 
 local function magnetGetTarget()
@@ -1554,7 +1535,6 @@ local function magnetTechTrigger(techName, targetHRP)
     end
 end
 
--- ─────────────────────────── SideDashAssist ───────────────────────
 State.SDA = { busy = false, color = Color3.fromRGB(142, 187, 255) }
 
 State.SDA.angle = function(v)
@@ -1761,7 +1741,6 @@ task.spawn(function()
     end
 end)
 
--- ─────────────────────────── Freeze Hold ─────────────────────────
 State.Freeze = { held = false, root = nil, velocity = nil }
 
 State.Freeze.hold = function()
@@ -1785,7 +1764,6 @@ State.Freeze.release = function()
     end
 end
 
--- ─────────────────────────── Fling ───────────────────────────────
 local flingState = { busy = false, loopRunning = false }
 
 local function findFlingTarget()
@@ -1889,7 +1867,6 @@ local function stopFlingLoop()
     Settings.Player.Fling.LoopFling = false
 end
 
--- ─────────────────────────── Anti-Death Counter ───────────────────
 local antiDeathConn
 local function applyAntiDeathCounter()
     disconnectConn(antiDeathConn)
@@ -1906,7 +1883,6 @@ local function applyAntiDeathCounter()
     end)
 end
 
--- ─────────────────────────── Custom dash ranges ──────────────────
 local dashRangeStates = {}
 
 local function getDashVelInst(inst)
@@ -1970,7 +1946,6 @@ connectSignal(RunService.Heartbeat, function()
     end
 end)
 
--- ─────────────────────────── Solitude Dash ───────────────────────
 local SOLITUDE_ANIM_A, SOLITUDE_ANIM_B = "10479335397", "13380255751"
 local solitudePullConn
 local solitudeNpcCache, solitudeLastNpcUpdate = {}, 0
@@ -2057,7 +2032,6 @@ local function doSolitudeTPAndStick()
     startSolitudePull()
 end
 
--- ─────────────────────────── WalkSpeed loop ───────────────────────
 connectSignal(RunService.Heartbeat, function()
     if Settings.Player.WalkSpeedEnabled and Humanoid then
         if Humanoid.WalkSpeed ~= Settings.Player.WalkSpeed then
@@ -2074,7 +2048,6 @@ connectSignal(RunService.Heartbeat, function()
     end
 end)
 
--- ─────────────────────────── No-Side-Dash-Cooldown ───────────────
 local function applyNoSideDashCooldown(on)
     if on then
         if Character then Character:SetAttribute("CustomSideDashCooldown", 0) end
@@ -2085,7 +2058,6 @@ local function applyNoSideDashCooldown(on)
     end
 end
 
--- ─────────────────────────── Backdash macro ───────────────────────
 local function execBackDash(numKey)
     tapKey(numKey)
     randomWait()
@@ -2117,7 +2089,6 @@ local function setBackdash(on)
     end
 end
 
--- ─────────────────────────── Misc utility ────────────────────────
 local function tween(obj, duration, props, style, dir)
     local t = TweenService:Create(obj, TweenInfo.new(duration, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props)
     t:Play(); return t
@@ -2139,7 +2110,6 @@ local function getThumbnail(plr)
     return ok and url or ""
 end
 
--- ─────────────────────────── Notifications ───────────────────────
 local notifGui, notifContainer, notifLayout, notifOrder
 do
     notifGui = Instance.new("ScreenGui")
@@ -2259,7 +2229,6 @@ local function mingoNotify(data)
     end)
 end
 
--- ─────────────────────────── ESP: BoxESP ─────────────────────────
 local BoxESP = { entries = {}, gui = nil, conn = nil }
 
 BoxESP.getGui = function()
@@ -2408,7 +2377,6 @@ BoxESP.step = function()
     end
 end
 
--- ─────────────────────────── ESP color + labels ──────────────────
 local function espColorFor(plr5, char4)
     local esp = Settings.Visuals.ESP
     if char4 and char4:FindFirstChild("Counter") then return esp.DeathCounterColor end
@@ -2513,7 +2481,6 @@ local function setESP(on)
     end
 end
 
--- ─────────────────────────── Headless ───────────────────────────
 local headlessConn
 local function headlessSet(transparency)
     local char8 = Character
@@ -2536,7 +2503,6 @@ local function applyHeadless(on)
     else   stopHeadless(); headlessSet(0) end
 end
 
--- ─────────────────────────── Korblox ────────────────────────────
 local korbloxConn
 local function applyKorblox(on)
     disconnectConn(korbloxConn); korbloxConn = nil
@@ -2599,7 +2565,6 @@ local function applyKorblox(on)
     end
 end
 
--- ─────────────────────────── SelfChams ───────────────────────────
 local selfChams = { highlight = nil, headMask = nil, mats = {} }
 
 local function revertSelfChamsMats()
@@ -2662,7 +2627,6 @@ local function applySelfChams()
     end
 end
 
--- ─────────────────────────── Effects Color ────────────────────────
 local effectObjects = setmetatable({}, { __mode = "k" })
 local charEffectsName = ""
 
@@ -2719,7 +2683,6 @@ local function refreshEffectsColor()
     end
 end
 
--- ─────────────────────────── No Textures ─────────────────────────
 local noTexData = {}
 local noTexRun = 0
 
@@ -2753,7 +2716,6 @@ local function applyNoTextures(rescan, enable)
     end)
 end
 
--- ─────────────────────────── Anti-Lag ────────────────────────────
 local antiLag = {
     active = false, textures = {}, effects = {}, skies = {}, atmos = {}, materials = {},
     partSet = setmetatable({}, { __mode = "k" }), lighting = nil, cc = nil, conns = {},
@@ -2888,7 +2850,6 @@ local function setAntiLag(on, silent)
     end
 end
 
--- ─────────────────────────── Motion Blur ─────────────────────────
 local MotionBlur = { blur = nil, conn = nil, lastCF = nil, currentBlur = 0 }
 
 MotionBlur.getBlur = function()
@@ -2936,7 +2897,6 @@ MotionBlur.set = function(on)
     end
 end
 
--- ─────────────────────────── Custom Sky ─────────────────────────
 local SkyManager = { touched = {}, created = {} }
 
 SkyManager.presets = {
@@ -3017,7 +2977,6 @@ SkyManager.apply = function()
     end
 end
 
--- ─────────────────────────── Custom Atmosphere ────────────────────
 local atmSnapshot = { exists = false, Density=0.3, Offset=0, Color=Color3.fromRGB(199,170,107), Decay=Color3.fromRGB(92,60,13), Glare=0, Haze=0 }
 local atmInstance, atmCreatedHere = nil, false
 
@@ -3058,7 +3017,6 @@ local function setCustomAtmosphere(on)
     end
 end
 
--- ─────────────────────────── Anti-Fling ──────────────────────────
 local antiFlingConn
 local function setAntiFling(on)
     disconnectConn(antiFlingConn); antiFlingConn = nil
@@ -3083,7 +3041,6 @@ local function setAntiFling(on)
     end)
 end
 
--- ─────────────────────────── Custom Background ───────────────────
 local function resolveImage(img)
     if img:sub(1, 5) == "file:" then
         local path = img:sub(6)
@@ -3104,7 +3061,6 @@ local function resolveImage(img)
     return img
 end
 
--- ─────────────────────────── Ping Spoof ──────────────────────────
 local pingHook = { installed = false, restore = nil, thread = nil }
 
 local function pingValue()
@@ -3216,7 +3172,6 @@ local function setPingSpoof(on)
     startPingLoop()
 end
 
--- ─────────────────────────── Device Spoof ────────────────────────
 local function sendPlatform(mobile, console)
     local comm5 = getCommunicate()
     if not (comm5 and comm5.Parent) then return end
@@ -3238,7 +3193,6 @@ local function setDeviceSpoof(on)
     sendPlatform(isMob3, isCon2)
 end
 
--- ─────────────────────────── Custom Ultbar ───────────────────────
 local ultbarConns = {}
 local function setupUltbar()
     for _, c in ipairs(ultbarConns) do disconnectConn(c) end
@@ -3274,7 +3228,6 @@ local function setupUltbar()
     end
 end
 
--- ─────────────────────────── Character avatar copy ───────────────
 local charCopy = {
     userId = nil, keep = true, cache = {},
     watch = nil,
@@ -3400,7 +3353,6 @@ connectSignal(player.CharacterAdded, function(char13)
     end
 end)
 
--- ─────────────────────────── Config system ───────────────────────
 local CONFIG_DIR = "MingoHub_Configs"
 local memoryFiles = {}
 
@@ -3700,7 +3652,6 @@ refreshGameplay = function()
     applyNoTextures(false, Settings.Visuals.NoTextures)
 end
 
--- ─────────────────────────── hookModel ───────────────────────────
 local hookedModels = setmetatable({}, { __mode = "k" })
 
 local function hookModel(model)
@@ -3802,7 +3753,6 @@ for _, p in ipairs(Players:GetPlayers()) do
     if p ~= player then onPlayerAdded(p) end
 end
 
--- ─────────────────────────── CharacterAdded ──────────────────────
 local animConn2
 local rootChildConn
 
@@ -3999,7 +3949,6 @@ end
 connectSignal(player.CharacterAdded, onCharacterAdded)
 if player.Character then task.spawn(onCharacterAdded, player.Character) end
 
--- ─────────────────────────── TechHelper macros ───────────────────
 local function runTechHelper()
     local th = Settings.Macros.TechHelper
     if not th.Enabled or th.Tech == "" then return end
@@ -4044,7 +3993,6 @@ local function runExtraTechHelper()
     end
 end
 
--- ─────────────────────────── Emote Dash ──────────────────────────
 local function runEmoteDash()
     local ed = Settings.Macros.EmoteDash
     if not ed.Enabled or not (Humanoid and RootPart and Humanoid.Health > 0) then return end
@@ -4061,7 +4009,6 @@ local function runEmoteDash()
     if ed.Type == "Straight" then techRotate(-90) end
 end
 
--- ─────────────────────────── True M1 Reset ───────────────────────
 local function runTrueM1Reset()
     if not Settings.Macros.TrueM1Reset.Enabled then return end
     local pr3 = pingRangePair(0.28)
@@ -4070,7 +4017,6 @@ local function runTrueM1Reset()
     task.wait(pr3[1]); releaseKey(Enum.KeyCode.D); techRotate(90); performFrontDash()
 end
 
--- ─────────────────────────── TDS ─────────────────────────────────
 local function runTDS()
     if not Settings.Misc.TDSEnabled then return end
     local char16 = Character or player.Character; if not char16 then return end
@@ -4084,7 +4030,6 @@ local function runTDS()
     fireM1Click()
 end
 
--- ─────────────────────────── Device detect ───────────────────────
 local function detectDevice()
     local ok25, ten = pcall(function() return game:GetService("GuiService"):IsTenFootInterface() end)
     if ok25 and ten then return "Console", false end
@@ -4107,7 +4052,6 @@ local function getExecutorName()
 end
 local EXECUTOR_NAME = getExecutorName()
 
--- ─────────────────────────── UI helpers ──────────────────────────
 local orderCounters = {}
 local function nextOrder(parent)
     orderCounters[parent] = (orderCounters[parent] or 0) + 1
@@ -4126,7 +4070,6 @@ local function hexToColor(hex)
     return nil
 end
 
--- ─────────────────────────── buildUI ─────────────────────────────
 local function buildUI()
     local keybindListening   = false
     local currentListenBtn   = nil
@@ -5379,7 +5322,6 @@ local function buildUI()
     }
 end
 
--- ─────────────────────────── Error reporting ─────────────────────
 local function reportBuildError(err6)
     local msg = tostring(err6); warn("[MingoHub] UI build failed: " .. msg)
     task.spawn(function()
@@ -5389,7 +5331,6 @@ local function reportBuildError(err6)
     end)
 end
 
--- ─────────────────────────── Boot ─────────────────────────────────
 local buildOk, Hub = pcall(buildUI)
 if not buildOk then reportBuildError(Hub); return end
 
