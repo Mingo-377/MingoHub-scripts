@@ -2168,7 +2168,6 @@ end
 
 local function buildUI()
     local extra = createExtraFeatures()
-    _G._mingoNotifyRef = extra.mingoNotify   -- expose for mingoNotifyShim
     local keybindListening = false
     local currentListeningButton = nil
 
@@ -5269,9 +5268,23 @@ local function buildUI()
         task.spawn(mingoExecExtraTech)
     end, function() end)
 
-    -- mingoNotifyShim already gates by category using _G._mingoNotifyRef (set above)
-    -- keep _G._mingoNotifyRef in sync if extra is replaced
-    _G._mingoNotifyRef = extra.mingoNotify
+    -- ═══════════════════════════════════════════
+    --  Notify override for category gating
+    -- ═══════════════════════════════════════════
+    do
+        local origNotify = extra.mingoNotify or extra.notify
+        if origNotify then
+            extra.mingoNotify = function(opts)
+                if not Settings.MingoNotifs.GlobalEnabled then return end
+                local cat = opts and opts.Category
+                if cat == "Ult"       and not Settings.MingoNotifs.UltEnabled          then return end
+                if cat == "Counter"   and not Settings.MingoNotifs.DeathCounterEnabled  then return end
+                if cat == "AutoTech"  and not Settings.MingoNotifs.AutoTechEnabled      then return end
+                if cat == "Fling"     and not Settings.MingoNotifs.FlingEnabled         then return end
+                origNotify(opts)
+            end
+        end
+    end
 
     local visibilityButton
 
@@ -5549,13 +5562,13 @@ local function buildUI()
                     local charAttr = model:GetAttribute("Character")
                     local ultName = ({ Bald="Saitama",Hunter="Garou",Monster="Red Garou",Cyborg="Genos",Ninja="Sonic",Batter="Metal Bat",Blade="Samurai",Esper="Tatsumaki",Purple="Siryu",Tech="Emperor" })[charAttr] or "Other"
                     local url = getThumbnail(plr)
-                    mingoNotifyShim({Title = "MingoHub", Category = "Ult", Description = string.format("%s used %s Ult!", plr.DisplayName, ultName), Image = url})
+                    extra.mingoNotify({Title = "MingoHub", Description = string.format("%s used %s Ult!", plr.DisplayName, ultName), Image = url})
                 end
             end)
             model.ChildAdded:Connect(function(child)
                 if child.Name == "Counter" and Settings.Misc.Notifications.Enabled and Settings.Misc.Notifications.Counter then
                     local url = getThumbnail(plr)
-                    mingoNotifyShim({Title = "MingoHub", Category = "Counter", Description = string.format("%s used Death Counter!", plr.DisplayName), Image = url})
+                    extra.mingoNotify({Title = "MingoHub", Description = string.format("%s used Death Counter!", plr.DisplayName), Image = url})
                 end
             end)
         end
@@ -5795,24 +5808,8 @@ print("[MingoHub] Loaded OK — " .. VERSION)
 -- All brand identifiers normalized to MingoHub namespace
 -- ============================================================
 
+local function initializeMingoExtensions()
 local mingoExt = {}
-
--- ── File-scope notify shim ────────────────────────────────
--- extra is local to buildUI(); mingoExt connections fire before buildUI().
--- This shim resolves the real function at call-time via _G, set by buildUI().
-_G._mingoNotifyRef = nil   -- buildUI() sets this after createExtraFeatures()
-local function mingoNotifyShim(opts)
-    local fn = _G._mingoNotifyRef
-    if fn then
-        if not Settings.MingoNotifs.GlobalEnabled then return end
-        local cat = opts and opts.Category
-        if cat == "Ult"      and not Settings.MingoNotifs.UltEnabled         then return end
-        if cat == "Counter"  and not Settings.MingoNotifs.DeathCounterEnabled then return end
-        if cat == "AutoTech" and not Settings.MingoNotifs.AutoTechEnabled     then return end
-        if cat == "Fling"    and not Settings.MingoNotifs.FlingEnabled        then return end
-        fn(opts)
-    end
-end
 
 -- ── World references ──────────────────────────────────────
 local mingoWorld = {
@@ -6420,7 +6417,7 @@ end
 mingoLockOn.start = function()
     local hrp, hum = mingoLockOn.pick()
     if not hrp then
-        mingoNotifyShim({ Title = "MingoHub", Description = "LockOn: no target found" })
+        extra.mingoNotify({ Title = "MingoHub", Description = "LockOn: no target found" })
         return
     end
     mingoLockOn.hrp   = hrp
@@ -7937,3 +7934,11 @@ _G.mingoExecExtraTech = mingoExecExtraTech
 _G.mingoDashBoost = mingoDashBoost
 _G.mingoOnDescendantAdded = mingoOnDescendantAdded
 _G.mingoRefreshEffectsColor = mingoRefreshEffectsColor
+_G.mingoChamsState = mingoChamsState
+_G.mingoRestoreChams = mingoRestoreChams
+_G.mingoMagnetStop = mingoMagnetStop
+_G.mingoFreezeRelease = mingoFreezeRelease
+
+end -- initializeMingoExtensions
+
+initializeMingoExtensions()
