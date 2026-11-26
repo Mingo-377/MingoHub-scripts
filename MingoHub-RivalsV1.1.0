@@ -1,0 +1,2245 @@
+-- MingoHub-Rivals | Integrated from Mingo Template | v1.1 | teamcheck-default + round-detect
+
+local Config = {
+    Title      = "MingoHub-Rivals",
+    Logo       = "M",
+    Accent     = Color3.fromRGB(0, 225, 255),
+    Design     = Vector2.new(720, 480),
+    MaxSize    = Vector2.new(960, 640),
+    MinSize    = Vector2.new(320, 240),
+    PcWidthPct = 0.78, PcHeightPct= 0.80,
+    MobWidthPct= 0.93, MobHeightPct=0.83,
+    Tabs       = { "Main", "Player", "Visuals", "Misc", "Configs", "Information" },
+    MaxToasts  = 4,
+}
+
+local Anim = {
+    EnableAnimations   = true, AnimationSpeed = 1, NotificationDuration = 3,
+    HoverAnimation = true, TabAnimation = true, ButtonAnimation = true,
+    ToggleAnimation = true, OpenAnimation = true, CloseAnimation = true,
+    FocusAnimation = true, DropdownAnimation = true,
+    TabExitDuration = 0.15, TabEnterDuration = 0.22, TabSlideOffset = 20,
+}
+
+local Theme = {
+    Bg = Color3.fromRGB(2, 3, 10), Bg2 = Color3.fromRGB(5, 8, 19),
+    Bg3 = Color3.fromRGB(10, 15, 31), Bg4 = Color3.fromRGB(18, 26, 48),
+    Stroke = Color3.fromRGB(74, 215, 255), Text = Color3.fromRGB(238, 250, 255),
+    TextDim = Color3.fromRGB(137, 164, 190), Accent = Config.Accent,
+    Danger = Color3.fromRGB(255, 82, 130), Success = Color3.fromRGB(61, 245, 202),
+    Warn = Color3.fromRGB(255, 194, 82),
+    Font = Enum.Font.Gotham, FontBold = Enum.Font.GothamBold, FontMono = Enum.Font.Code,
+}
+local Neon = {
+    Cyan = Color3.fromRGB(0, 225, 255), Blue = Color3.fromRGB(48, 116, 255),
+    Magenta = Color3.fromRGB(255, 48, 190), Violet = Color3.fromRGB(139, 76, 255),
+}
+
+local function svc(n) local ok,s = pcall(function() return game:GetService(n) end); return ok and s or nil end
+local TweenService     = svc("TweenService")
+local UserInputService = svc("UserInputService")
+local Players          = svc("Players")
+local Lighting         = svc("Lighting")
+local RunService       = svc("RunService")
+local HttpService      = svc("HttpService")
+local SoundService     = svc("SoundService")
+local ReplicatedStorage= svc("ReplicatedStorage")
+local VirtualInputManager = svc("VirtualInputManager")
+local camera           = workspace.CurrentCamera
+local player           = Players and Players.LocalPlayer
+local playerGui        = player and player:FindFirstChildOfClass("PlayerGui")
+
+if player and not playerGui then
+    local ok, pg = pcall(function() return player:WaitForChild("PlayerGui", 5) end)
+    if ok and pg then playerGui = pg end
+end
+
+local function has(fn) return type(_G[fn]) == "function" end
+local identifyExec = "unknown"
+if has("identifyexecutor") then
+    local ok, res = pcall(identifyexecutor)
+    if ok and res then identifyExec = tostring(res) end
+end
+local hasClipboard = has("setclipboard")
+
+local function getRoot()
+    if type(_G.gethui) == "function" then
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
+    end
+    local cg = svc("CoreGui")
+    if cg then
+        local probe = Instance.new("Folder")
+        local ok = pcall(function() probe.Parent = cg end)
+        if ok and probe.Parent == cg then pcall(function() probe:Destroy() end); return cg end
+        pcall(function() probe:Destroy() end)
+    end
+    if playerGui then return playerGui end
+    if player then
+        local ok, pg = pcall(function() return player:WaitForChild("PlayerGui", 5) end)
+        if ok and pg then return pg end
+    end
+    error("MingoHub-Rivals: could not resolve a GUI root")
+end
+
+local function new(c,p)
+    local i = Instance.new(c)
+    if p then for k,v in pairs(p) do i[k]=v end end
+    if i:IsA("GuiObject") and i.BackgroundTransparency == 0 and i.BackgroundColor3 then
+        local bg = i.BackgroundColor3
+        if bg == Theme.Bg then i.BackgroundTransparency = 0.35
+        elseif bg == Theme.Bg2 then i.BackgroundTransparency = 0.45
+        elseif bg == Theme.Bg3 then i.BackgroundTransparency = 0.55
+        elseif bg == Theme.Bg4 then i.BackgroundTransparency = 0.65
+        elseif bg == Theme.Accent then i.BackgroundTransparency = 0.25 end
+    end
+    return i
+end
+local function corner(p,r) return new("UICorner",{CornerRadius=r or UDim.new(0,10),Parent=p}) end
+local function stroke(p,c,t)
+    local s = new("UIStroke",{Color=c or Theme.Stroke,Thickness=t or 1,ApplyStrokeMode=Enum.ApplyStrokeMode.Border,Parent=p})
+    pcall(function() s.Transparency = 0.6 end)
+    return s
+end
+local function pad(p,x,y) return new("UIPadding",{PaddingTop=UDim.new(0,y or x),PaddingBottom=UDim.new(0,y or x),PaddingLeft=UDim.new(0,x),PaddingRight=UDim.new(0,x),Parent=p}) end
+local function isMobile() return UserInputService and UserInputService.TouchEnabled and not UserInputService.MouseEnabled end
+
+local function aDur(base)
+    if not Anim.EnableAnimations then return 0 end
+    local s = Anim.AnimationSpeed; if not s or s <= 0 then s = 1 end
+    return (base or 0.18) / s
+end
+
+local tweenTracks = setmetatable({}, {__mode = "k"})
+local function playTween(inst, props, dur, style, dir)
+    if not inst or inst.Parent == nil then return nil end
+    if not TweenService then
+        for k,v in pairs(props) do pcall(function() inst[k] = v end) end
+        return nil
+    end
+    if tweenTracks[inst] then pcall(function() tweenTracks[inst]:Cancel() end); tweenTracks[inst] = nil end
+    local d = aDur(dur)
+    if d <= 0 then for k,v in pairs(props) do pcall(function() inst[k] = v end) end; return nil end
+    local t = TweenService:Create(inst, TweenInfo.new(d, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+    tweenTracks[inst] = t; t:Play()
+    t.Completed:Connect(function() if tweenTracks[inst] == t then tweenTracks[inst] = nil end end)
+    return t
+end
+local function tween(inst, props, dur) return playTween(inst, props, dur) end
+local function waitTweenOrTimeout(t, timeout)
+    if not t then return end
+    local done = false; local conn
+    conn = t.Completed:Connect(function() done = true end)
+    local deadline = os.clock() + (timeout or 1)
+    while not done and os.clock() < deadline do task.wait(0.02) end
+    if conn then conn:Disconnect() end
+end
+
+local root = getRoot()
+for _, guiName in ipairs({"MingoHubUI", "MingoHubToasts", "MingoTemplateUI", "MingoTemplateToasts"}) do
+    local previous = root:FindFirstChild(guiName)
+    if previous then pcall(function() previous:Destroy() end) end
+end
+if Lighting then
+    for _, blurName in ipairs({"MingoHubGlassBlur", "MingoGlassBlur"}) do
+        local previousBlur = Lighting:FindFirstChild(blurName)
+        if previousBlur then pcall(function() previousBlur:Destroy() end) end
+    end
+end
+
+local blur = nil; local blurEnabled = true; local BLUR_MAX_SIZE = 12
+if Lighting then blur = new("BlurEffect", {Name="MingoHubGlassBlur", Size=0, Parent=Lighting}) end
+local function setBlurActive(active, instant)
+    if not blur or not blur.Parent then return end
+    local target = (active and blurEnabled) and BLUR_MAX_SIZE or 0
+    if instant then blur.Size = target
+    else playTween(blur, {Size=target}, 0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.Out) end
+end
+
+local screen = new("ScreenGui",{Name="MingoHubUI",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=100,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+if type(_G.syn) == "table" and type(_G.syn.protect_gui) == "function" then pcall(_G.syn.protect_gui, screen) end
+screen.Parent = root
+local rootScale = new("UIScale",{Scale=1,Parent=screen})
+
+local toastScreen = new("ScreenGui",{Name="MingoHubToasts",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=101,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+if type(_G.syn) == "table" and type(_G.syn.protect_gui) == "function" then pcall(_G.syn.protect_gui, toastScreen) end
+toastScreen.Parent = root
+
+local toastHolder = new("Frame",{Name="Toasts",BackgroundTransparency=1,Size=UDim2.fromOffset(340,400),AnchorPoint=Vector2.new(0.5,0),Position=UDim2.new(0.5,0,0,12),Parent=toastScreen})
+new("UIListLayout",{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder,HorizontalAlignment=Enum.HorizontalAlignment.Center,Parent=toastHolder})
+
+local function updateToastLayout()
+    local vp = camera and camera.ViewportSize or Vector2.new(1280,720)
+    local mobile = isMobile()
+    local w = mobile and math.min(math.floor(vp.X*0.88),340) or 320
+    toastHolder.Size = UDim2.fromOffset(w, 400)
+    if mobile then toastHolder.AnchorPoint = Vector2.new(0.5,0); toastHolder.Position = UDim2.new(0.5,0,0,12)
+    else toastHolder.AnchorPoint = Vector2.new(1,0); toastHolder.Position = UDim2.new(1,-14,0,14) end
+end
+updateToastLayout()
+
+local activeToasts = {}; local toastOrder = 0
+local function destroyToast(card)
+    if not card or not card.Parent then return end
+    for i = #activeToasts, 1, -1 do if activeToasts[i] == card then table.remove(activeToasts, i); break end end
+    card:Destroy()
+end
+local function evictOldestToast()
+    if #activeToasts >= Config.MaxToasts then
+        local old = table.remove(activeToasts, 1); if old then old:Destroy() end
+    end
+end
+local Notify
+Notify = function(text, kind, desc)
+    kind = kind or "info"
+    local c = Theme.Accent
+    if kind=="success" then c=Theme.Success elseif kind=="error" then c=Theme.Danger elseif kind=="warn" or kind=="warning" then c=Theme.Warn end
+    evictOldestToast(); toastOrder += 1
+    local card = new("CanvasGroup",{Size=UDim2.new(1,0,0,desc and 68 or 56),BackgroundColor3=Theme.Bg2,BorderSizePixel=0,GroupTransparency=1,LayoutOrder=toastOrder,Parent=toastHolder})
+    corner(card, UDim.new(0, 10)); stroke(card, c, 1)
+    local bar = new("Frame",{Position=UDim2.new(0,6,0,8),Size=UDim2.new(0,3,1,-16),BackgroundColor3=c,BorderSizePixel=0,Parent=card})
+    corner(bar, UDim.new(1, 0))
+    local iconTxt = kind=="success" and "✓" or kind=="error" and "✕" or (kind=="warn" or kind=="warning") and "!" or "i"
+    local icon = new("TextLabel",{Text=iconTxt,Font=Theme.FontBold,TextSize=14,TextColor3=Theme.Text,BackgroundColor3=c,BorderSizePixel=0,Size=UDim2.fromOffset(24,24),Position=UDim2.new(0,14,0.5,0),AnchorPoint=Vector2.new(0,0.5),Parent=card})
+    corner(icon, UDim.new(1, 0))
+    new("TextLabel",{Text=tostring(text),Font=Theme.FontBold,TextSize=13,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,BackgroundTransparency=1,Position=UDim2.new(0,46,0,desc and 10 or 0),Size=UDim2.new(1,-56,0,desc and 20 or 56),Parent=card})
+    if desc then
+        new("TextLabel",{Text=tostring(desc),Font=Theme.Font,TextSize=11,TextColor3=Theme.TextDim,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,BackgroundTransparency=1,Position=UDim2.new(0,46,0,30),Size=UDim2.new(1,-56,0,16),Parent=card})
+    end
+    table.insert(activeToasts, card)
+    local mobile = isMobile()
+    local startPos = mobile and UDim2.fromOffset(0, -40) or UDim2.fromOffset(60, 0)
+    card.Position = startPos
+    playTween(card, {GroupTransparency = 0, Position = UDim2.fromOffset(0, 0)}, 0.22)
+    playTween(bar, {Size = UDim2.new(0, 3, 0, 0)}, Anim.NotificationDuration, Enum.EasingStyle.Linear)
+    local dur = Anim.NotificationDuration
+    task.delay(dur, function()
+        if not card.Parent then return end
+        local outEnd = mobile and UDim2.fromOffset(0, -40) or UDim2.fromOffset(60, 0)
+        local t = playTween(card, {GroupTransparency = 1, Position = outEnd}, 0.22)
+        if t then t.Completed:Connect(function() destroyToast(card) end) end
+        task.delay(0.5, function() destroyToast(card) end)
+    end)
+end
+
+local W, H = Config.Design.X, Config.Design.Y
+local main = new("CanvasGroup",{Name="Window",Size=UDim2.fromOffset(W,H),Position=UDim2.fromScale(0.5,0.5),AnchorPoint=Vector2.new(0.5,0.5),BackgroundColor3=Theme.Bg,BorderSizePixel=0,ClipsDescendants=true,GroupTransparency=1,Visible=false,Parent=screen})
+corner(main, UDim.new(0, 14)); stroke(main, Theme.Stroke, 1)
+new("UISizeConstraint",{MinSize=Config.MinSize, MaxSize=Config.MaxSize, Parent=main})
+local mainScale = new("UIScale", {Scale=1, Parent=main})
+local windowSizeScale = 1
+local panelBaseColor = Theme.Bg2
+local cornerRadiusPx = 10
+
+local Backgrounds = {
+    ["Glitch"]  = { Type = "Sprite", Id = "rbxassetid://103058823767948", Cols = 4, Rows = 3, FrameW = 256, FrameH = 256, Frames = 12, FPS = 11 },
+    ["Default"] = { Type = "Procedural" }
+}
+local BackgroundOrder = { "Default", "Glitch" }
+
+local bgImage = new("ImageLabel",{Name="BackgroundImage",BackgroundTransparency=1,Image="",ScaleType=Enum.ScaleType.Crop,ResampleMode=Enum.ResamplerMode.Default,Size=UDim2.fromScale(1,1),ZIndex=0,Visible=false,Parent=main})
+local bgProcedural = new("Frame",{Name="BackgroundProcedural",BackgroundColor3=Theme.Bg,BackgroundTransparency=0,BorderSizePixel=0,Size=UDim2.fromScale(1,1),ZIndex=0,ClipsDescendants=true,Visible=false,Parent=main})
+local procGradient = new("UIGradient",{
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(1, 2, 8)),
+        ColorSequenceKeypoint.new(0.28, Color3.fromRGB(3, 9, 24)),
+        ColorSequenceKeypoint.new(0.56, Color3.fromRGB(13, 7, 29)),
+        ColorSequenceKeypoint.new(0.78, Color3.fromRGB(4, 18, 31)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(1, 2, 8)),
+    }), Rotation = 0, Parent = bgProcedural
+})
+
+local procShapes = {}; local ambientGlows = {}
+local glowColors = {Neon.Cyan, Neon.Magenta, Neon.Blue, Neon.Violet, Neon.Cyan}
+for i = 1, #glowColors do
+    local size = math.random(250, 410)
+    local glow = new("Frame",{Name="AmbientGlow"..i,Size=UDim2.fromOffset(size,size),Position=UDim2.fromScale(math.random(),math.random()),AnchorPoint=Vector2.new(0.5,0.5),BackgroundColor3=glowColors[i],BackgroundTransparency=0.855,BorderSizePixel=0,ZIndex=0,Parent=bgProcedural})
+    corner(glow, UDim.new(1, 0))
+    local glowGradient = new("UIGradient",{Color=ColorSequence.new({ColorSequenceKeypoint.new(0,glowColors[i]),ColorSequenceKeypoint.new(1,Neon.Violet)}),Rotation=math.random(0,360),Parent=glow})
+    table.insert(ambientGlows, {Frame=glow,Gradient=glowGradient,BaseSize=size,BaseX=glow.Position.X.Scale,BaseY=glow.Position.Y.Scale,Phase=math.random()*math.pi*2})
+end
+for i = 1, 58 do
+    local size = math.random(4, 18)
+    local isCircle = math.random(1, 5) <= 4
+    local shapeSize = isCircle and UDim2.fromOffset(size, size) or UDim2.fromOffset(size * 1.8, math.max(2, math.floor(size * 0.22)))
+    local tint = (i % 3 == 0) and Neon.Magenta or ((i % 2 == 0) and Neon.Cyan or Neon.Blue)
+    local shape = new("Frame",{Size=shapeSize,Position=UDim2.fromScale(math.random(),math.random()),AnchorPoint=Vector2.new(0.5,0.5),BackgroundColor3=tint,BackgroundTransparency=isCircle and math.random(90,97)/100 or 0.82,BorderSizePixel=0,ZIndex=0,Parent=bgProcedural})
+    if isCircle then corner(shape, UDim.new(1,0))
+    else shape.Rotation = math.random(0, 180); corner(shape, UDim.new(1, 0)) end
+    new("UIStroke",{Color=tint,Thickness=1,Transparency=math.random(42,72)/100,ApplyStrokeMode=Enum.ApplyStrokeMode.Border,Parent=shape})
+    table.insert(procShapes, {Frame=shape,SpeedX=(math.random()-0.5)*0.045,SpeedY=(math.random()-0.5)*0.045,RotSpeed=(math.random()-0.5)*9,Phase=math.random()*math.pi*2,BaseSize=size,BaseTransparency=shape.BackgroundTransparency})
+end
+local bgOverlay = new("Frame",{Name="BackgroundOverlay",BackgroundColor3=Color3.fromRGB(0,1,8),BackgroundTransparency=0.48,BorderSizePixel=0,Size=UDim2.fromScale(1,1),ZIndex=1,Parent=main})
+
+local bgConn, currentBGName, bgAnimated = nil, BackgroundOrder[1], true
+local customBackgroundId = ""
+local customImageFit = "Crop"
+
+local function stopBGAnim() if bgConn then bgConn:Disconnect(); bgConn = nil end end
+
+local function setBackground(name)
+    local data = Backgrounds[name]; if not data then return end
+    currentBGName = name; stopBGAnim()
+    if data.Type == "Sprite" then
+        bgProcedural.Visible = false; bgImage.Visible = true
+        bgImage.Image = data.Id
+        bgImage.ImageRectSize = Vector2.new(data.FrameW, data.FrameH)
+        bgImage.ImageRectOffset = Vector2.new(0, 0)
+        if bgAnimated and RunService then
+            local startTime = os.clock(); local fps = data.FPS or 30
+            bgConn = RunService.RenderStepped:Connect(function()
+                local elapsed = os.clock() - startTime
+                local currentFrame = math.floor(elapsed * fps) % data.Frames
+                local col = currentFrame % data.Cols; local row = math.floor(currentFrame / data.Cols)
+                bgImage.ImageRectOffset = Vector2.new(col * data.FrameW, row * data.FrameH)
+            end)
+        end
+    elseif data.Type == "Procedural" then
+        bgImage.Visible = false; bgProcedural.Visible = true
+        if bgAnimated and RunService then
+            local startTime = os.clock()
+            bgConn = RunService.RenderStepped:Connect(function(dt)
+                local elapsed = os.clock() - startTime
+                procGradient.Rotation = (elapsed * 7) % 360
+                for _, glowData in ipairs(ambientGlows) do
+                    local glow = glowData.Frame
+                    if glow.Parent then
+                        local pulse = math.sin(elapsed * 0.55 + glowData.Phase)
+                        glow.Position = UDim2.fromScale(glowData.BaseX + math.sin(elapsed*0.16+glowData.Phase)*0.075, glowData.BaseY + math.cos(elapsed*0.14+glowData.Phase)*0.075)
+                        local glowScale = 1 + pulse * 0.055
+                        glow.Size = UDim2.fromOffset(glowData.BaseSize * glowScale, glowData.BaseSize * glowScale)
+                        glowData.Gradient.Rotation = (elapsed * 9 + glowData.Phase * 35) % 360
+                    end
+                end
+                for _, s in ipairs(procShapes) do
+                    local f = s.Frame
+                    if f.Parent then
+                        local px = f.Position.X.Scale + s.SpeedX * dt
+                        local py = f.Position.Y.Scale + s.SpeedY * dt
+                        if px > 1.2 then px = -0.2 elseif px < -0.2 then px = 1.2 end
+                        if py > 1.2 then py = -0.2 elseif py < -0.2 then py = 1.2 end
+                        f.Position = UDim2.fromScale(px, py)
+                        f.Rotation = f.Rotation + s.RotSpeed * dt
+                        local pulse = math.sin(elapsed * 1.65 + s.Phase); local scale = 1 + pulse * 0.12
+                        f.Size = UDim2.fromOffset(s.BaseSize * scale, s.BaseSize * scale)
+                        f.BackgroundTransparency = math.clamp(s.BaseTransparency - pulse * 0.04, 0.72, 0.99)
+                    end
+                end
+            end)
+        end
+    end
+end
+
+local function setCustomBackground(assetId)
+    assetId = tostring(assetId or ""):gsub("%s+", ""):gsub("^rbxassetid://", "")
+    if not assetId:match("^%d+$") then return false, "Enter a numeric Roblox asset ID." end
+    customBackgroundId = assetId; currentBGName = "Custom"; stopBGAnim()
+    bgProcedural.Visible = false; bgImage.Visible = true
+    bgImage.Image = "rbxassetid://" .. assetId
+    bgImage.ImageRectSize = Vector2.new(0, 0); bgImage.ImageRectOffset = Vector2.new(0, 0)
+    bgImage.ScaleType = (customImageFit == "Fit" and Enum.ScaleType.Fit) or (customImageFit == "Stretch" and Enum.ScaleType.Stretch) or Enum.ScaleType.Crop
+    return true
+end
+local function setBGAnimated(on)
+    bgAnimated = on
+    if currentBGName == "Custom" then stopBGAnim() else setBackground(currentBGName) end
+end
+
+local function recomputeRootScale()
+    local vp = camera and camera.ViewportSize or Vector2.new(1280,720)
+    local mobile = isMobile()
+    local targetW, targetH
+    if mobile then
+        targetW = math.floor(vp.X * Config.MobWidthPct); targetH = math.floor(vp.Y * Config.MobHeightPct)
+    else
+        targetW = math.floor(math.min(vp.X * Config.PcWidthPct, Config.MaxSize.X))
+        targetH = math.floor(math.min(vp.Y * Config.PcHeightPct, Config.MaxSize.Y))
+    end
+    targetW = math.clamp(targetW, Config.MinSize.X, Config.MaxSize.X)
+    targetH = math.clamp(targetH, Config.MinSize.Y, Config.MaxSize.Y)
+    rootScale.Scale = math.min(targetW / W, targetH / H)
+    updateToastLayout()
+end
+recomputeRootScale()
+
+local animState = "idle"; local bubble = nil; local closed = false
+
+local function animateShow(cb)
+    if animState ~= "idle" or closed then return end
+    animState = "showing"; main.Visible = true; setBlurActive(true)
+    local center = UDim2.new(0.5, 0, 0.5, 0)
+    main.GroupTransparency = 1; mainScale.Scale = 0.91 * windowSizeScale; main.Position = UDim2.new(0.5, 0, 0.5, 18)
+    local done = false
+    local function finish()
+        if done or animState ~= "showing" then return end
+        done = true
+        main.GroupTransparency = 0; mainScale.Scale = windowSizeScale; main.Position = center; animState = "idle"
+        if cb then pcall(cb) end
+    end
+    if Anim.OpenAnimation and Anim.EnableAnimations then
+        local t = playTween(main, {GroupTransparency = 0, Position = center}, 0.46, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        playTween(mainScale, {Scale=windowSizeScale}, 0.52, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        if t then t.Completed:Connect(function(state) if state == Enum.PlaybackState.Completed then finish() end end); task.delay(0.68, finish) else finish() end
+    else
+        main.GroupTransparency = 0; mainScale.Scale = windowSizeScale; main.Position = center; finish()
+    end
+end
+
+local function animateHide(cb)
+    if animState ~= "idle" or closed then return end
+    animState = "hiding"; setBlurActive(false)
+    local center = UDim2.new(0.5, 0, 0.5, 0); local done = false
+    local function finish()
+        if done or animState ~= "hiding" then return end
+        done = true; main.Visible = false; main.GroupTransparency = 0; mainScale.Scale = windowSizeScale
+        main.Position = center; animState = "idle"
+        if cb then pcall(cb) end
+    end
+    if Anim.CloseAnimation and Anim.EnableAnimations then
+        local t = playTween(main, {GroupTransparency = 1, Position = UDim2.new(0.5, 0, 0.5, 14)}, 0.32, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        playTween(mainScale, {Scale=0.94 * windowSizeScale}, 0.34, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        if t then t.Completed:Connect(function(state) if state == Enum.PlaybackState.Completed then finish() end end); task.delay(0.48, finish) else finish() end
+    else finish() end
+end
+
+local titlebar = new("Frame",{Size=UDim2.new(1,0,0,44), BackgroundColor3=Theme.Bg2, BorderSizePixel=0, Parent=main})
+corner(titlebar,UDim.new(0,14))
+local logo = new("Frame",{Size=UDim2.fromOffset(26,26), Position=UDim2.new(0,12,0.5,0), AnchorPoint=Vector2.new(0,0.5), BackgroundColor3=Theme.Accent, BorderSizePixel=0, Parent=titlebar})
+corner(logo,UDim.new(0,8))
+new("TextLabel",{Text=Config.Logo,Font=Theme.FontBold,TextSize=15,TextColor3=Theme.Text,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Parent=logo})
+new("TextLabel",{Text=Config.Title,Font=Theme.FontBold,TextSize=14,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Position=UDim2.new(0,46,0,0),Size=UDim2.new(1,-260,1,0),Parent=titlebar})
+local titleBtns = new("Frame",{Size=UDim2.fromOffset(70,44), Position=UDim2.new(1,-9,0.5,0), AnchorPoint=Vector2.new(1,0.5), BackgroundTransparency=1, Parent=titlebar})
+new("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,HorizontalAlignment=Enum.HorizontalAlignment.Right,VerticalAlignment=Enum.VerticalAlignment.Center,Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder,Parent=titleBtns})
+local function titleBtn(t,c,o)
+    local b = new("TextButton",{Text=t,Font=Theme.FontBold,TextSize=32,TextColor3=Theme.Text,BackgroundColor3=Theme.Bg3,BorderSizePixel=0,AutoButtonColor=false,Size=UDim2.fromOffset(60,40),LayoutOrder=o,Parent=titleBtns})
+    corner(b,UDim.new(0,9)); stroke(b, Neon.Cyan, 1).Transparency = 0.72
+    b.MouseEnter:Connect(function() playTween(b,{BackgroundColor3=c},0.1) end)
+    b.MouseLeave:Connect(function() playTween(b,{BackgroundColor3=Theme.Bg3},0.1) end)
+    return b
+end
+local btnMin = titleBtn("−",Theme.Bg4,1)
+
+do
+    local drag,di,sp,sp0 = false,nil,nil,nil
+    titlebar.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag,di = true,i; sp,sp0 = i.Position, main.Position end
+    end)
+    titlebar.InputChanged:Connect(function(i)
+        if not drag or i~=di then return end
+        if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then
+            local d = i.Position-sp
+            main.Position = UDim2.new(sp0.X.Scale,sp0.X.Offset+d.X,sp0.Y.Scale,sp0.Y.Offset+d.Y)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(i) if i==di then drag,di = false,nil end end)
+end
+
+local body = new("Frame",{Size=UDim2.new(1,0,1,-44), Position=UDim2.new(0,0,0,44), BackgroundTransparency=1, Parent=main})
+local sidebar = new("Frame",{Size=UDim2.new(0,168,1,0), BackgroundColor3=Theme.Bg2, BorderSizePixel=0, Parent=body})
+corner(sidebar,UDim.new(0,12)); pad(sidebar,8)
+new("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder,Parent=sidebar})
+
+local searchWrap = new("Frame",{Size=UDim2.new(1,0,0,32), BackgroundColor3=Theme.Bg3, BorderSizePixel=0, LayoutOrder=1, Parent=sidebar})
+corner(searchWrap,UDim.new(0,8))
+local searchStroke = stroke(searchWrap,Theme.Stroke)
+pad(searchWrap,8,0)
+local searchBox = new("TextBox",{Text="", PlaceholderText="Search...", Font=Theme.Font, TextSize=12, TextColor3=Theme.Text, PlaceholderColor3=Theme.TextDim, TextXAlignment=Enum.TextXAlignment.Left, BackgroundTransparency=1, ClearTextOnFocus=false, Size=UDim2.fromScale(1,1), Parent=searchWrap})
+searchBox.Focused:Connect(function() playTween(searchStroke,{Color=Theme.Accent, Thickness=1.5},0.15) end)
+searchBox.FocusLost:Connect(function() playTween(searchStroke,{Color=Theme.Stroke, Thickness=1},0.15) end)
+local tabList = new("Frame",{Size=UDim2.new(1,0,1,-40), BackgroundTransparency=1, LayoutOrder=2, Parent=sidebar})
+new("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder,Parent=tabList})
+local content = new("Frame",{Size=UDim2.new(1,-178,1,0), Position=UDim2.new(0,178,0,0), BackgroundTransparency=1, ClipsDescendants=true, Parent=body})
+
+local UI = {}
+function UI.Header(parent,text,order)
+    local f = new("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,LayoutOrder=order or 0,Parent=parent})
+    new("TextLabel",{Text=text:upper(),Font=Theme.FontBold,TextSize=10,TextColor3=Theme.TextDim,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Parent=f})
+    return f
+end
+function UI.Divider(parent,order)
+    return new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=Theme.Stroke,BackgroundTransparency=0.5, BorderSizePixel=0,LayoutOrder=order or 0,Parent=parent})
+end
+function UI.Label(parent,text,order,color)
+    return new("TextLabel",{Text=text,Font=Theme.Font,TextSize=12,TextColor3=color or Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),LayoutOrder=order or 0,Parent=parent})
+end
+function UI.Button(parent,text,desc,callback,order)
+    local wrap = new("Frame",{Size=UDim2.new(1,0,0,desc and 54 or 36),BackgroundColor3=Theme.Bg2, BorderSizePixel=0, LayoutOrder=order or 0, Parent=parent})
+    corner(wrap,UDim.new(0,8)); stroke(wrap,Theme.Stroke)
+    local btnScale = new("UIScale",{Scale=1,Parent=wrap})
+    new("TextLabel",{Text=text,Font=Theme.FontBold,TextSize=13,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Position=UDim2.new(0,12,0,desc and 8 or 0),Size=UDim2.new(1,-24,0,desc and 18 or 36),Parent=wrap})
+    if desc then
+        new("TextLabel",{Text=desc,Font=Theme.Font,TextSize=11,TextColor3=Theme.TextDim,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Position=UDim2.new(0,12,0,28),Size=UDim2.new(1,-24,0,16),Parent=wrap})
+    end
+    local hit = new("TextButton",{Text="",BackgroundTransparency=1,AutoButtonColor=false,Size=UDim2.fromScale(1,1),Parent=wrap})
+    local hovering = false
+    hit.MouseEnter:Connect(function() hovering = true
+        if Anim.ButtonAnimation and Anim.HoverAnimation then playTween(btnScale, {Scale=1.02}, 0.12); playTween(wrap, {BackgroundColor3=Theme.Bg3}, 0.12) end
+    end)
+    hit.MouseLeave:Connect(function() hovering = false
+        if Anim.ButtonAnimation then playTween(btnScale, {Scale=1}, 0.15); playTween(wrap, {BackgroundColor3=Theme.Bg2}, 0.15) end
+    end)
+    hit.MouseButton1Down:Connect(function()
+        if Anim.ButtonAnimation then playTween(btnScale, {Scale=0.96}, 0.08); playTween(wrap, {BackgroundColor3=Theme.Accent}, 0.1) end
+    end)
+    hit.MouseButton1Up:Connect(function()
+        if Anim.ButtonAnimation then playTween(btnScale, {Scale=hovering and 1.02 or 1}, 0.15); playTween(wrap, {BackgroundColor3=hovering and Theme.Bg3 or Theme.Bg2}, 0.15) end
+    end)
+    hit.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.Touch and Anim.ButtonAnimation then playTween(btnScale, {Scale=0.96}, 0.08); playTween(wrap, {BackgroundColor3=Theme.Accent}, 0.1) end
+    end)
+    hit.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.Touch and Anim.ButtonAnimation then playTween(btnScale, {Scale=1}, 0.15); playTween(wrap, {BackgroundColor3=Theme.Bg2}, 0.15) end
+    end)
+    hit.Activated:Connect(function() pcall(callback) end)
+    return hit
+end
+
+local toggleSetters, sliderSetters, dropdownSetters = {}, {}, {}
+
+function UI.Toggle(parent,text,default,onChange,order)
+    local row = new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundColor3=Theme.Bg2,BorderSizePixel=0,LayoutOrder=order or 0,Parent=parent})
+    corner(row,UDim.new(0,8)); stroke(row,Theme.Stroke)
+    new("TextLabel",{Text=text,Font=Theme.Font,TextSize=13,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Position=UDim2.new(0,12,0,0),Size=UDim2.new(1,-64,1,0),Parent=row})
+    local track = new("Frame",{Size=UDim2.fromOffset(38,20),Position=UDim2.new(1,-12,0.5,0),AnchorPoint=Vector2.new(1,0.5),BackgroundColor3=Theme.Bg3,BorderSizePixel=0,Parent=row})
+    corner(track,UDim.new(1,0))
+    local thumb = new("Frame",{Size=UDim2.fromOffset(16,16),Position=UDim2.new(0,2,0.5,0),AnchorPoint=Vector2.new(0,0.5),BackgroundColor3=Theme.TextDim,BorderSizePixel=0,Parent=track})
+    corner(thumb,UDim.new(1,0))
+    local state = default
+    local function render(animated)
+        if state then
+            playTween(thumb,{Position=UDim2.new(1,-18,0.5,0),BackgroundColor3=Theme.Accent}, animated and 0.15 or 0)
+            playTween(track,{BackgroundColor3=Theme.Accent:Lerp(Color3.new(0,0,0),0.55)}, animated and 0.15 or 0)
+        else
+            playTween(thumb,{Position=UDim2.new(0,2,0.5,0),BackgroundColor3=Theme.TextDim}, animated and 0.15 or 0)
+            playTween(track,{BackgroundColor3=Theme.Bg3}, animated and 0.15 or 0)
+        end
+    end
+    render(false)
+    toggleSetters[text] = function(value, fireCallback)
+        state = value == true; render(false)
+        if fireCallback then pcall(onChange, state) end
+    end
+    local hit = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Parent=row})
+    hit.Activated:Connect(function() state = not state; render(Anim.ToggleAnimation); pcall(onChange, state) end)
+    return row
+end
+
+function UI.Slider(parent,text,minV,maxV,defaultV,onChange,order)
+    local frame = new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundColor3=Theme.Bg2,BorderSizePixel=0,LayoutOrder=order or 0,Parent=parent})
+    corner(frame,UDim.new(0,8)); stroke(frame,Theme.Stroke)
+    local lbl = new("TextLabel",{Text=("%s  ·  %s"):format(text,tostring(defaultV)),Font=Theme.Font,TextSize=12,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Position=UDim2.new(0,12,0,6),Size=UDim2.new(1,-24,0,16),Parent=frame})
+    local track = new("Frame",{Size=UDim2.new(1,-24,0,8),Position=UDim2.new(0,12,0,34),BackgroundColor3=Theme.Bg3,BorderSizePixel=0,Parent=frame})
+    corner(track,UDim.new(1,0))
+    local fill = new("Frame",{Size=UDim2.fromScale((defaultV-minV)/(maxV-minV),1),BackgroundColor3=Theme.Accent,BorderSizePixel=0,Parent=track})
+    corner(fill,UDim.new(1,0))
+    local hit = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,2.5),Position=UDim2.fromScale(0,-0.75),Parent=track})
+    local drag = false
+    local function setValue(v, animated, fireCallback)
+        v = math.clamp(math.floor((tonumber(v) or defaultV) + 0.5), minV, maxV)
+        local r = (v-minV)/(maxV-minV)
+        playTween(fill,{Size=UDim2.fromScale(r,1)}, animated and 0.1 or 0)
+        lbl.Text = ("%s  ·  %s"):format(text,tostring(v))
+        if fireCallback then pcall(onChange,v) end
+    end
+    sliderSetters[text] = function(v, fireCallback) setValue(v, false, fireCallback) end
+    local function setFrom(x)
+        local r = math.clamp((x-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
+        local v = math.floor(minV+(maxV-minV)*r+0.5)
+        setValue(v, true, true)
+    end
+    hit.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=true; setFrom(i.Position.X) end
+    end)
+    hit.InputChanged:Connect(function(i)
+        if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then setFrom(i.Position.X) end
+    end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end
+    end)
+    return frame
+end
+
+function UI.Dropdown(parent,text,options,onChange,order)
+    local frame = new("Frame",{Size=UDim2.new(1,0,0,36),BackgroundColor3=Theme.Bg2,BorderSizePixel=0,ClipsDescendants=true,LayoutOrder=order or 0,Parent=parent})
+    corner(frame,UDim.new(0,8)); stroke(frame,Theme.Stroke)
+    local current = options[1] or "—"
+    local head = new("TextButton",{Text=text..":  "..current,Font=Theme.Font,TextSize=12,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Size=UDim2.new(1,0,0,36),Parent=frame})
+    pad(head,10,0)
+    local menu = new("Frame",{Size=UDim2.new(1,0,0,#options*30),Position=UDim2.new(0,0,0,36),BackgroundColor3=Theme.Bg3,BorderSizePixel=0,Visible=false,Parent=frame})
+    new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Parent=menu})
+    dropdownSetters[text] = function(value, fireCallback)
+        current = tostring(value); head.Text = text..":  "..current
+        menu.Visible = false; frame.Size = UDim2.new(1,0,0,36)
+        if fireCallback then pcall(onChange,current) end
+    end
+    for i,opt in ipairs(options) do
+        local item = new("TextButton",{Text=opt,Font=Theme.Font,TextSize=12,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,BackgroundColor3=Theme.Bg3,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(1,0,0,30),LayoutOrder=i,Parent=menu})
+        pad(item,10,0)
+        item.MouseEnter:Connect(function() playTween(item,{BackgroundTransparency=0},0.1) end)
+        item.MouseLeave:Connect(function() playTween(item,{BackgroundTransparency=1},0.1) end)
+        item.Activated:Connect(function() dropdownSetters[text](opt, true); playTween(frame,{Size=UDim2.new(1,0,0,36)},0.15) end)
+    end
+    head.Activated:Connect(function()
+        menu.Visible = not menu.Visible
+        local target = menu.Visible and (36+#options*30) or 36
+        playTween(frame,{Size=UDim2.new(1,0,0,target)}, Anim.DropdownAnimation and 0.15 or 0)
+    end)
+    return frame
+end
+
+function UI.Textbox(parent,text,placeholder,onSubmit,order)
+    local wrap = new("Frame",{Size=UDim2.new(1,0,0,36),BackgroundColor3=Theme.Bg2,BorderSizePixel=0,LayoutOrder=order or 0,Parent=parent})
+    corner(wrap,UDim.new(0,8))
+    local wrapStroke = stroke(wrap,Theme.Stroke); pad(wrap,10,0)
+    local box = new("TextBox",{Text=text or "",PlaceholderText=placeholder or "",Font=Theme.Font,TextSize=12,TextColor3=Theme.Text,PlaceholderColor3=Theme.TextDim,TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,ClearTextOnFocus=false,Size=UDim2.fromScale(1,1),Parent=wrap})
+    box.Focused:Connect(function() playTween(wrapStroke,{Color=Theme.Accent,Thickness=1.5},0.15) end)
+    box.FocusLost:Connect(function(enter)
+        playTween(wrapStroke,{Color=Theme.Stroke,Thickness=1},0.15)
+        if enter then pcall(onSubmit,box.Text) end
+    end)
+    return box
+end
+
+function UI.ScrollList(parent,height,order)
+    local sf = new("ScrollingFrame",{Size=UDim2.new(1,0,0,height or 160),BackgroundColor3=Theme.Bg2,BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=Theme.Stroke,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ClipsDescendants=true,LayoutOrder=order or 0,Parent=parent})
+    corner(sf,UDim.new(0,8)); stroke(sf,Theme.Stroke); pad(sf,8)
+    new("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder,Parent=sf})
+    return sf
+end
+
+local tabFrames = {}; local tabButtons = {}; local tabButtonStrokes = {}; local activeTab = nil
+local function setTabVisual(name, isActive)
+    local btn = tabButtons[name]; local outline = tabButtonStrokes[name]
+    if not btn then return end
+    playTween(btn, {TextColor3 = isActive and Theme.Text or Theme.TextDim, BackgroundColor3 = isActive and Theme.Bg3 or Theme.Bg2}, 0.16)
+    if outline then playTween(outline, {Color = isActive and Neon.Cyan or Theme.Stroke, Thickness = isActive and 1.8 or 0.85, Transparency = isActive and 0.06 or 0.78}, 0.16) end
+end
+local pendingTab = nil; local transitioning = false
+local function transitionTo(target)
+    if not tabFrames[target] then return end
+    if target == activeTab and not pendingTab then return end
+    if target == pendingTab then return end
+    pendingTab = target
+    if transitioning then return end
+    transitioning = true
+    task.spawn(function()
+        while pendingTab do
+            local tgt = pendingTab; pendingTab = nil
+            if tgt ~= activeTab then
+                if activeTab then
+                    local prev = tabFrames[activeTab]
+                    if prev then
+                        setTabVisual(activeTab, false); prev.Scroll.ScrollingEnabled = false
+                        if Anim.TabAnimation then
+                            local t = playTween(prev.Group, {GroupTransparency = 1, Position = UDim2.fromOffset(-Anim.TabSlideOffset, 0)}, Anim.TabExitDuration)
+                            waitTweenOrTimeout(t, Anim.TabExitDuration + 0.6)
+                        else
+                            prev.Group.GroupTransparency = 1; prev.Group.Position = UDim2.fromOffset(-Anim.TabSlideOffset, 0)
+                        end
+                        prev.Group.Visible = false; prev.Group.Position = UDim2.fromOffset(0, 0); prev.Group.GroupTransparency = 1
+                    end
+                end
+                local nxt = tabFrames[tgt]
+                if nxt then
+                    nxt.Group.Visible = true; nxt.Group.GroupTransparency = 1; nxt.Group.Position = UDim2.fromOffset(Anim.TabSlideOffset, 0)
+                    nxt.Scroll.ScrollingEnabled = true; activeTab = tgt; setTabVisual(tgt, true)
+                    if Anim.TabAnimation then
+                        local t = playTween(nxt.Group, {GroupTransparency = 0, Position = UDim2.fromOffset(0, 0)}, Anim.TabEnterDuration)
+                        waitTweenOrTimeout(t, Anim.TabEnterDuration + 0.6)
+                    else
+                        nxt.Group.GroupTransparency = 0; nxt.Group.Position = UDim2.fromOffset(0, 0)
+                    end
+                end
+            end
+        end
+        transitioning = false
+    end)
+end
+
+local function CreateTab(name, order)
+    local btn = new("TextButton",{Text=name,Font=Theme.FontBold,TextSize=13,TextColor3=Theme.TextDim,TextXAlignment=Enum.TextXAlignment.Left,BackgroundColor3=Theme.Bg2,BorderSizePixel=0,AutoButtonColor=false,Size=UDim2.new(1,0,0,36),LayoutOrder=order,Parent=tabList})
+    corner(btn,UDim.new(0,8)); pad(btn,10,0)
+    local tabOutline = stroke(btn, Theme.Stroke, 0.85); tabOutline.Transparency = 0.78
+    tabButtonStrokes[name] = tabOutline
+    btn.MouseEnter:Connect(function() if activeTab ~= name then playTween(btn,{TextColor3=Theme.Text},0.1) end end)
+    btn.MouseLeave:Connect(function() if activeTab ~= name then playTween(btn,{TextColor3=Theme.TextDim},0.1) end end)
+    btn.Activated:Connect(function() transitionTo(name) end)
+    local group = new("CanvasGroup",{Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, GroupTransparency = 1, Visible = false, Position = UDim2.fromOffset(0, 0), ClipsDescendants = true, Parent = content})
+    local sf = new("ScrollingFrame",{Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = Theme.Stroke, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, ClipsDescendants = true, Parent = group})
+    pad(sf, 14)
+    new("UIListLayout",{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder,Parent=sf})
+    tabFrames[name] = {Group = group, Scroll = sf}
+    tabButtons[name] = btn
+    return sf
+end
+
+local tabs = {}
+for i,name in ipairs(Config.Tabs) do tabs[name] = CreateTab(name, i) end
+
+-- ==========================================================
+-- RIVALS GAMEPLAY STATE
+-- ==========================================================
+local Rivals = {
+    Aimbot = { Enabled = false, Smoothing = 5, FOV = 90, HitChance = 100, Part = "Head" },
+    Silent = { Enabled = false, Part = "Head", FOV = 180 },
+    Rage   = { Enabled = false, Priority = "Current Weapon" },
+    Trigger= { Enabled = false, Delay = 0, LastShot = 0 },
+    WalkSpeed = 16, JumpPower = 16, InfJump = false,
+    MusicId = "", HitSoundId = "", KillSoundId = "",
+    ESP = false,
+    Antilag = false,
+    Headless = false, Korblox = false,
+    TeamCheck = true,   -- default on
+    GameMode = "Unknown",
+}
+
+local LocalPlayer = player
+local function getChar() return LocalPlayer and LocalPlayer.Character end
+local function getHum() local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
+local function getHRP() local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
+
+-- ==========================================================
+-- ROUND / MODE DETECTION
+-- ==========================================================
+local ModeKeywords = {
+    FFA  = { "ffa", "freeforall", "free-for-all", "deathmatch", "dm" },
+    TDM  = { "tdm", "teamdeath", "teamdeathmatch", "teams" },
+    RANKED = { "ranked", "competitive" },
+}
+
+local function classifyModeString(s)
+    s = tostring(s or ""):lower()
+    for mode, keys in pairs(ModeKeywords) do
+        for _, k in ipairs(keys) do
+            if s:find(k, 1, true) then return mode end
+        end
+    end
+    return nil
+end
+
+local function scanForMode()
+    -- Team present → TDM (most reliable signal)
+    local lp = LocalPlayer
+    if lp and lp.Team ~= nil then return "TDM" end
+
+    -- Scan ReplicatedStorage for mode/round string values
+    if ReplicatedStorage then
+        local scanNames = {"GameMode","Mode","Round","RoundMode","MatchInfo","GameState","RoundState","MatchState","RoundData"}
+        for _, n in ipairs(scanNames) do
+            local obj = ReplicatedStorage:FindFirstChild(n, true)
+            if obj then
+                if obj:IsA("StringValue") then
+                    local c = classifyModeString(obj.Value)
+                    if c then return c end
+                end
+                if obj:IsA("Folder") or obj:IsA("Configuration") then
+                    for _, child in ipairs(obj:GetDescendants()) do
+                        pcall(function()
+                            if child:IsA("StringValue") or child:IsA("ValueBase") then
+                                local c = classifyModeString(tostring(child.Value))
+                                if c then return c end
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+    end
+    return "FFA"
+end
+
+local modeListeners = {}
+local function notifyModeChange(newMode)
+    Rivals.GameMode = newMode
+    for _, cb in ipairs(modeListeners) do pcall(cb, newMode) end
+end
+
+task.spawn(function()
+    task.wait(1)
+    while not closed do
+        local ok, mode = pcall(scanForMode)
+        if ok and mode and mode ~= Rivals.GameMode then
+            notifyModeChange(mode)
+        end
+        task.wait(2)
+    end
+end)
+
+local function getEnemies()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if hum and hrp and hum.Health > 0 then
+                table.insert(list, {Player = p, Character = p.Character, Humanoid = hum, Root = hrp})
+            end
+        end
+    end
+    return list
+end
+
+local function getPart(char, partName)
+    if partName == "Head" then return char:FindFirstChild("Head") end
+    if partName == "HumanoidRootPart" then return char:FindFirstChild("HumanoidRootPart") end
+    if partName == "Torso" then
+        return char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso")
+    end
+    return char:FindFirstChild("Head")
+end
+
+local function worldToScreen(pos)
+    if not camera then return nil end
+    local sp, onScreen = camera:WorldToViewportPoint(pos)
+    if onScreen then return Vector2.new(sp.X, sp.Y) end
+    return nil
+end
+
+local function isAlly(plr)
+    if not Rivals.TeamCheck then return false end
+    if not LocalPlayer or not plr then return false end
+    if Rivals.GameMode == "FFA" or Rivals.GameMode == "Unknown" then return false end
+    local ok, lpTeam = pcall(function() return LocalPlayer.Team end)
+    local ok2, plTeam = pcall(function() return plr.Team end)
+    if not ok or not ok2 then return false end
+    if lpTeam == nil or plTeam == nil then return false end
+    return lpTeam == plTeam
+end
+
+local function getClosest(partName, fov)
+    if not camera or not getHRP() then return nil end
+    local center = camera.ViewportSize * 0.5
+    local best, bestDist = nil, fov
+    for _, e in ipairs(getEnemies()) do
+        if not isAlly(e.Player) then
+            local part = getPart(e.Character, partName)
+            if part then
+                local screen = worldToScreen(part.Position)
+                if screen then
+                    local dist = (screen - center).Magnitude
+                    if dist < bestDist then best, bestDist = e, dist end
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- ==========================================================
+-- AIMBOT
+-- ==========================================================
+local aimConn
+local function runAimbot()
+    if not Rivals.Aimbot.Enabled then return end
+    if math.random(1, 100) > Rivals.Aimbot.HitChance then return end
+    local target = getClosest(Rivals.Aimbot.Part, Rivals.Aimbot.FOV)
+    if not target or not camera then return end
+    local part = getPart(target.Character, Rivals.Aimbot.Part); if not part then return end
+    local current = camera.CFrame
+    local desired = CFrame.new(current.Position, part.Position)
+    local noise = CFrame.Angles(math.rad((math.random()-0.5)*0.35), math.rad((math.random()-0.5)*0.35), 0)
+    local smoothingAlpha = math.clamp(1 / math.max(Rivals.Aimbot.Smoothing, 1), 0.05, 1)
+    pcall(function() camera.CFrame = current:Lerp(desired * noise, smoothingAlpha) end)
+end
+local function startAimbot()
+    if aimConn then aimConn:Disconnect() end
+    aimConn = RunService.RenderStepped:Connect(function() pcall(runAimbot) end)
+end
+local function stopAimbot() if aimConn then aimConn:Disconnect(); aimConn = nil end end
+
+-- ==========================================================
+-- SILENT AIM
+-- ==========================================================
+local silentStatusLabel = nil
+local function updateSilentStatus()
+    if silentStatusLabel then
+        if Rivals.Silent.Enabled then
+            silentStatusLabel.Text = "Status: Manipulated"
+            silentStatusLabel.TextColor3 = Theme.Success
+        else
+            silentStatusLabel.Text = "Status: Inactive"
+            silentStatusLabel.TextColor3 = Theme.Danger
+        end
+    end
+end
+
+local silentHookInstalled = false
+local function hookSilentAim()
+    if silentHookInstalled then return true end
+    if not (hookmetamethod and getnamecallmethod and getrawmetatable and setreadonly and newcclosure) then return false end
+    local ok = pcall(function()
+        local mt = getrawmetatable(game)
+        local old = mt.__namecall
+        setreadonly(mt, false)
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            if Rivals.Silent.Enabled then
+                local target = getClosest(Rivals.Silent.Part, Rivals.Silent.FOV)
+                if target then
+                    local part = getPart(target.Character, Rivals.Silent.Part)
+                    local hrp = getHRP()
+                    if part and hrp then
+                        if method == "FindPartOnRay" then
+                            local args = {...}
+                            if type(args[1]) == "Ray" then
+                                args[1] = Ray.new(hrp.Position, (part.Position - hrp.Position).Unit * 1000)
+                                return old(self, unpack(args))
+                            end
+                        elseif method == "Raycast" then
+                            local args = {...}
+                            if typeof(args[1]) == "Vector3" and typeof(args[2]) == "Vector3" then
+                                local a = { ... }
+                                a[1] = hrp.Position
+                                a[2] = (part.Position - hrp.Position).Unit * 1000
+                                return old(self, unpack(a))
+                            end
+                        end
+                    end
+                end
+            end
+            return old(self, ...)
+        end)
+        setreadonly(mt, true)
+    end)
+    if ok then silentHookInstalled = true end
+    return ok
+end
+
+-- ==========================================================
+-- TRIGGER BOT
+-- ==========================================================
+local triggerConn
+local function runTrigger()
+    if not Rivals.Trigger.Enabled then return end
+    if os.clock() - Rivals.Trigger.LastShot < (Rivals.Trigger.Delay / 1000) then return end
+    local target = getClosest("Head", 8)
+    if target and camera and VirtualInputManager then
+        Rivals.Trigger.LastShot = os.clock()
+        pcall(function() VirtualInputManager:SendMouseButtonEvent(camera.ViewportSize.X/2, camera.ViewportSize.Y/2, 0, true, game, 0) end)
+        task.delay(0.05, function()
+            pcall(function() VirtualInputManager:SendMouseButtonEvent(camera.ViewportSize.X/2, camera.ViewportSize.Y/2, 0, false, game, 0) end)
+        end)
+    end
+end
+local function startTrigger()
+    if triggerConn then triggerConn:Disconnect() end
+    triggerConn = RunService.Heartbeat:Connect(function() pcall(runTrigger) end)
+end
+local function stopTrigger() if triggerConn then triggerConn:Disconnect(); triggerConn = nil end end
+
+-- ==========================================================
+-- RAGE BOT
+-- ==========================================================
+local rageConn
+local function runRage()
+    if not Rivals.Rage.Enabled then return end
+    local hrp = getHRP(); if not hrp then return end
+    local target, bestDist = nil, math.huge
+    for _, e in ipairs(getEnemies()) do
+        if not isAlly(e.Player) then
+            local d = (e.Root.Position - hrp.Position).Magnitude
+            if d < bestDist and d < 120 then bestDist = d; target = e end
+        end
+    end
+    if target and camera and VirtualInputManager then
+        local head = target.Character:FindFirstChild("Head")
+        if head then
+            pcall(function()
+                camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
+                VirtualInputManager:SendMouseButtonEvent(camera.ViewportSize.X/2, camera.ViewportSize.Y/2, 0, true, game, 0)
+                task.delay(0.03, function()
+                    pcall(function() VirtualInputManager:SendMouseButtonEvent(camera.ViewportSize.X/2, camera.ViewportSize.Y/2, 0, false, game, 0) end)
+                end)
+            end)
+        end
+    end
+end
+local function startRage()
+    if rageConn then rageConn:Disconnect() end
+    rageConn = RunService.Heartbeat:Connect(function() pcall(runRage) end)
+end
+local function stopRage() if rageConn then rageConn:Disconnect(); rageConn = nil end end
+
+-- ==========================================================
+-- MOVEMENT
+-- ==========================================================
+local function applyMovement()
+    local hum = getHum()
+    if hum then
+        pcall(function()
+            hum.WalkSpeed = Rivals.WalkSpeed
+            hum.JumpPower = Rivals.JumpPower
+            hum.UseJumpPower = true
+        end)
+    end
+end
+if LocalPlayer then
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(1)
+        applyMovement()
+        hookHitSound()
+    end)
+end
+local infJumpConn
+local function startInfJump()
+    if infJumpConn then infJumpConn:Disconnect() end
+    infJumpConn = UserInputService.JumpRequest:Connect(function()
+        if Rivals.InfJump then
+            local hum = getHum()
+            if hum then pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end) end
+        end
+    end)
+end
+startInfJump()
+
+-- ==========================================================
+-- SOUNDS
+-- ==========================================================
+local musicSound, hitSound, killSound
+
+local function playMusic(id)
+    if musicSound then musicSound:Destroy(); musicSound = nil end
+    if not id or id == "" then return end
+    musicSound = Instance.new("Sound")
+    musicSound.SoundId = "rbxassetid://" .. tostring(id)
+    musicSound.Volume = 0.5; musicSound.Looped = true; musicSound.Parent = SoundService
+    pcall(function() musicSound:Play() end)
+end
+local function playHitSound(id)
+    if not id or id == "" then return end
+    if hitSound then hitSound:Destroy() end
+    hitSound = Instance.new("Sound")
+    hitSound.SoundId = "rbxassetid://" .. tostring(id)
+    hitSound.Volume = 0.8; hitSound.Parent = SoundService
+    pcall(function() hitSound:Play() end)
+    task.delay(2, function() if hitSound then hitSound:Destroy(); hitSound = nil end end)
+end
+local function playKillSound(id)
+    if not id or id == "" then return end
+    if killSound then killSound:Destroy() end
+    killSound = Instance.new("Sound")
+    killSound.SoundId = "rbxassetid://" .. tostring(id)
+    killSound.Volume = 1; killSound.Parent = SoundService
+    pcall(function() killSound:Play() end)
+    task.delay(3, function() if killSound then killSound:Destroy(); killSound = nil end end)
+end
+
+local hitSoundConn = nil
+local function hookHitSound()
+    if hitSoundConn then hitSoundConn:Disconnect(); hitSoundConn = nil end
+    local hum = getHum(); if not hum then return end
+    local lastHP = hum.Health
+    hitSoundConn = hum.HealthChanged:Connect(function(hp)
+        pcall(function()
+            if hp < lastHP and Rivals.HitSoundId ~= "" then
+                playHitSound(Rivals.HitSoundId)
+            end
+            lastHP = hp
+        end)
+    end)
+end
+hookHitSound()
+
+-- ==========================================================
+-- ESP (fixed: BoxStroke stored in cache)
+-- ==========================================================
+local espFolder = new("Folder", {Name="MingoESP", Parent=screen})
+local espCache = {}
+local function clearESP()
+    for _, obj in pairs(espCache) do
+        if obj.Box and obj.Box.Parent then obj.Box:Destroy() end
+        if obj.Name and obj.Name.Parent then obj.Name:Destroy() end
+        if obj.HP and obj.HP.Parent then obj.HP:Destroy() end
+    end
+    espCache = {}
+end
+local function createESPFor(e)
+    if espCache[e.Player] then return end
+    local box = new("Frame", {BackgroundTransparency = 1, BorderSizePixel = 0, Parent = espFolder, Visible = false})
+    local boxStroke = new("UIStroke", {Color = Color3.fromRGB(255,0,0), Thickness = 1.5, Parent = box})
+    local nameLbl = new("TextLabel", {BackgroundTransparency = 1, Font = Theme.FontBold, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255), TextStrokeTransparency = 0.3, Text = e.Player.Name, Parent = espFolder, Visible = false})
+    local hpLbl = new("TextLabel", {BackgroundTransparency = 1, Font = Theme.Font, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255), TextStrokeTransparency = 0.3, Text = "100", Parent = espFolder, Visible = false})
+    espCache[e.Player] = {Box = box, BoxStroke = boxStroke, Name = nameLbl, HP = hpLbl}
+end
+
+local espConn
+local function runESP()
+    if not Rivals.ESP then clearESP(); return end
+    for _, e in ipairs(getEnemies()) do
+        createESPFor(e)
+        local data = espCache[e.Player]
+        if data then
+            local head = e.Character:FindFirstChild("Head")
+            local hrp = e.Root
+            if head and hrp and camera then
+                local headScreen = worldToScreen(head.Position + Vector3.new(0, 0.5, 0))
+                local hrpScreen = worldToScreen(hrp.Position - Vector3.new(0, 3, 0))
+                if headScreen and hrpScreen then
+                    local h = math.abs(hrpScreen.Y - headScreen.Y)
+                    local w = h * 0.5
+                    data.Box.Visible = true
+                    data.Box.Position = UDim2.fromOffset(headScreen.X - w/2, headScreen.Y)
+                    data.Box.Size = UDim2.fromOffset(w, h)
+                    data.BoxStroke.Color = isAlly(e.Player) and Color3.fromRGB(0,80,255) or Color3.fromRGB(255,0,0)
+                    data.Name.Visible = true
+                    data.Name.Position = UDim2.fromOffset(headScreen.X - 50, headScreen.Y - 18)
+                    data.Name.Size = UDim2.fromOffset(100, 14)
+                    data.Name.Text = e.Player.Name
+                    data.HP.Visible = true
+                    data.HP.Position = UDim2.fromOffset(headScreen.X - 50, headScreen.Y + h + 2)
+                    data.HP.Size = UDim2.fromOffset(100, 12)
+                    local myHrp = getHRP()
+                    local dist = myHrp and math.floor((hrp.Position - myHrp.Position).Magnitude) or 0
+                    data.HP.Text = ("HP: %d | %dm"):format(math.floor(e.Humanoid.Health), dist)
+                else
+                    data.Box.Visible = false; data.Name.Visible = false; data.HP.Visible = false
+                end
+            end
+        end
+    end
+    for plr, data in pairs(espCache) do
+        if not plr.Parent or not plr.Character then
+            if data.Box then data.Box:Destroy() end
+            if data.Name then data.Name:Destroy() end
+            if data.HP then data.HP:Destroy() end
+            espCache[plr] = nil
+        end
+    end
+end
+local function startESP()
+    if espConn then espConn:Disconnect() end
+    espConn = RunService.RenderStepped:Connect(function() pcall(runESP) end)
+end
+local function stopESP() if espConn then espConn:Disconnect(); espConn = nil end; clearESP() end
+
+-- ==========================================================
+-- ANTILAG
+-- ==========================================================
+local antilagCache = {}
+local function enableAntilag()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        pcall(function()
+            if obj:IsA("MeshPart") and obj.TextureID ~= "" then
+                antilagCache[obj] = obj.TextureID; obj.TextureID = ""
+            elseif obj:IsA("Texture") then
+                antilagCache[obj] = obj.Transparency; obj.Transparency = 1
+            elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                antilagCache[obj] = obj.Enabled; obj.Enabled = false
+            elseif obj:IsA("BasePart") then
+                antilagCache[obj] = {Material = obj.Material, Shadow = obj.CastShadow}
+                obj.Material = Enum.Material.Plastic; obj.CastShadow = false
+            end
+        end)
+    end
+end
+local function disableAntilag()
+    for obj, data in pairs(antilagCache) do
+        pcall(function()
+            if obj:IsA("MeshPart") then obj.TextureID = data
+            elseif obj:IsA("Texture") then obj.Transparency = data
+            elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then obj.Enabled = data
+            elseif obj:IsA("BasePart") and type(data) == "table" then
+                obj.Material = data.Material; obj.CastShadow = data.Shadow
+            end
+        end)
+    end
+    antilagCache = {}
+end
+
+-- ==========================================================
+-- DISGUISE / HEADLESS / KORBLOX
+-- ==========================================================
+local function disguiseAs(nameOrId)
+    if not LocalPlayer then return false end
+    if tostring(nameOrId):match("^%d+$") then
+        local id = tonumber(nameOrId)
+        return pcall(function()
+            local desc = Players:GetHumanoidDescriptionFromUserId(id)
+            local hum = getHum()
+            if hum and desc then hum:ApplyDescription(desc) end
+        end)
+    else
+        return pcall(function()
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Name:lower() == tostring(nameOrId):lower() and p.Character then
+                    local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        local d = hum:GetAppliedDescription()
+                        local myHum = getHum()
+                        if myHum and d then myHum:ApplyDescription(d) end
+                    end
+                    break
+                end
+            end
+        end)
+    end
+end
+local function applyHeadless(on)
+    local char = getChar(); if not char then return end
+    local head = char:FindFirstChild("Head"); if not head then return end
+    if on then
+        for _, c in ipairs(head:GetChildren()) do
+            if c:IsA("MeshPart") or c:IsA("SpecialMesh") or c:IsA("Decal") then
+                pcall(function() c.Transparency = 1 end)
+            end
+        end
+    else
+        local hum = getHum()
+        if hum then
+            local desc = hum:GetAppliedDescription()
+            if desc then pcall(function() hum:ApplyDescription(desc) end) end
+        end
+    end
+end
+local function applyKorblox(on)
+    local char = getChar(); if not char then return end
+    local rightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg")
+    if on and rightLeg then
+        for _, c in ipairs(rightLeg:GetChildren()) do
+            if c:IsA("BasePart") or c:IsA("Decal") then pcall(function() c.Transparency = 1 end) end
+        end
+        pcall(function()
+            local mesh = Instance.new("SpecialMesh")
+            mesh.MeshId = "rbxassetid://10009834121"
+            mesh.Parent = rightLeg
+        end)
+    end
+end
+
+-- ==========================================================
+-- TAB: MAIN
+-- ==========================================================
+do
+    local mt = tabs["Main"]
+    -- Mode banner
+    local modeBanner = new("Frame", {Size = UDim2.new(1,0,0,32), BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, LayoutOrder = 0, Parent = mt})
+    corner(modeBanner, UDim.new(0,8)); stroke(modeBanner, Theme.Stroke, 1)
+    local modeLbl = new("TextLabel", {
+        Text = "MODE: " .. Rivals.GameMode .. "  ·  TEAM CHECK: ON",
+        Font = Theme.FontBold, TextSize = 12, TextColor3 = Theme.Accent,
+        BackgroundTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left,
+        Position = UDim2.new(0,12,0,0), Size = UDim2.new(1,-24,1,0), Parent = modeBanner,
+    })
+    table.insert(modeListeners, function(mode)
+        modeLbl.Text = "MODE: " .. mode .. "  ·  TEAM CHECK: " .. (Rivals.TeamCheck and "ON" or "OFF")
+    end)
+
+    UI.Header(mt, "Aimbot", 1)
+    UI.Toggle(mt, "Enable Aimbot", false, function(on)
+        Rivals.Aimbot.Enabled = on
+        if on then startAimbot(); Notify("Aimbot","success","Enabled")
+        else stopAimbot(); Notify("Aimbot","info","Disabled") end
+    end, 2)
+    UI.Slider(mt, "Aimbot Smoothing", 1, 10, 5, function(v) Rivals.Aimbot.Smoothing = v end, 3)
+    UI.Slider(mt, "Aimbot FOV", 1, 360, 90, function(v) Rivals.Aimbot.FOV = v end, 4)
+    UI.Slider(mt, "Aimbot Hit Chance %", 1, 100, 100, function(v) Rivals.Aimbot.HitChance = v end, 5)
+    UI.Dropdown(mt, "Target Part", {"Head","HumanoidRootPart","Torso"}, function(v) Rivals.Aimbot.Part = v end, 6)
+
+    UI.Divider(mt, 7)
+    UI.Header(mt, "Silent Aim", 8)
+    UI.Toggle(mt, "Enable Silent Aim", false, function(on)
+        Rivals.Silent.Enabled = on
+        if on then
+            local ok = hookSilentAim()
+            Notify("Silent Aim", ok and "success" or "warn", ok and "Hooked" or "Executor lacks hookmetamethod")
+        else Notify("Silent Aim","info","Disabled") end
+        updateSilentStatus()
+    end, 9)
+    UI.Dropdown(mt, "Silent Target", {"Head","HumanoidRootPart"}, function(v) Rivals.Silent.Part = v end, 10)
+    UI.Slider(mt, "Silent FOV", 1, 360, 180, function(v) Rivals.Silent.FOV = v end, 11)
+    silentStatusLabel = UI.Label(mt, "Status: Inactive", 12, Theme.Danger)
+
+    UI.Divider(mt, 13)
+    UI.Header(mt, "RageBot", 14)
+    UI.Toggle(mt, "Enable RageBot", false, function(on)
+        Rivals.Rage.Enabled = on
+        if on then startRage(); Notify("RageBot","success","Enabled")
+        else stopRage(); Notify("RageBot","info","Disabled") end
+    end, 15)
+    UI.Dropdown(mt, "Weapon Priority", {"Current Weapon","Sniper","SMG","All"}, function(v) Rivals.Rage.Priority = v end, 16)
+
+    UI.Divider(mt, 17)
+    UI.Header(mt, "Trigger Bot", 18)
+    UI.Toggle(mt, "Enable Trigger Bot", false, function(on)
+        Rivals.Trigger.Enabled = on
+        if on then startTrigger(); Notify("Trigger","success","Enabled")
+        else stopTrigger(); Notify("Trigger","info","Disabled") end
+    end, 19)
+    UI.Slider(mt, "Trigger Delay (ms)", 0, 500, 0, function(v) Rivals.Trigger.Delay = v end, 20)
+
+    UI.Divider(mt, 21)
+    UI.Header(mt, "Targeting", 22)
+    UI.Toggle(mt, "Team Check (TDM only)", true, function(on)
+        Rivals.TeamCheck = on
+        modeLbl.Text = "MODE: " .. Rivals.GameMode .. "  ·  TEAM CHECK: " .. (on and "ON" or "OFF")
+        Notify("Team Check", "info", on and "Enabled" or "Disabled (all players are targets)")
+    end, 23)
+end
+
+-- ==========================================================
+-- TAB: PLAYER
+-- ==========================================================
+do
+    local pl = tabs["Player"]
+    UI.Header(pl, "Movement", 1)
+    UI.Slider(pl, "WalkSpeed", 16, 100, 16, function(v) Rivals.WalkSpeed = v; applyMovement() end, 2)
+    UI.Slider(pl, "JumpPower", 16, 100, 16, function(v) Rivals.JumpPower = v; applyMovement() end, 3)
+    UI.Toggle(pl, "Infinite Jump", false, function(on) Rivals.InfJump = on end, 4)
+
+    UI.Divider(pl, 5)
+    UI.Header(pl, "BoomBox / Music", 6)
+    local songPresets = {
+        ["Minecraft"] = "122558579457115",
+        ["It's Like I'm Not Even Here"] = "83707813531588",
+        ["Leavemsg"] = "138007429508984",
+        ["KitKitKit"] = "85598257402579",
+        ["Cook Pardon"] = "89468064746667",
+    }
+    local musicCustom = nil
+    UI.Dropdown(pl, "Preset Song", {"Minecraft","It's Like I'm Not Even Here","Leavemsg","KitKitKit","Cook Pardon"}, function(v) musicCustom = songPresets[v] end, 7)
+    local musicCustomBox = UI.Textbox(pl, "", "Custom Audio Asset ID", function(v) musicCustom = v end, 8)
+    UI.Button(pl, "Play Music", "Looped locally", function()
+        local id = musicCustomBox.Text ~= "" and musicCustomBox.Text or musicCustom
+        if id then playMusic(id); Notify("Music","success","Playing ID "..tostring(id))
+        else Notify("Music","error","Pick a preset or enter an ID") end
+    end, 9)
+    UI.Button(pl, "Stop Music", nil, function()
+        if musicSound then musicSound:Destroy(); musicSound = nil end
+        Notify("Music","info","Stopped")
+    end, 10)
+
+    UI.Divider(pl, 11)
+    UI.Header(pl, "Hit Sound", 12)
+    local hitPresets = {["Minecraft Hit"]="8458185621",["Minecraft Hit 2"]="6361963422",["Forsaken"]="6909318500"}
+    local hitCustom = nil
+    UI.Dropdown(pl, "Preset Hit Sound", {"Minecraft Hit","Minecraft Hit 2","Forsaken"}, function(v) hitCustom = hitPresets[v] end, 13)
+    local hitCustomBox = UI.Textbox(pl, "", "Custom Hit Sound ID", function(v) hitCustom = v end, 14)
+    UI.Button(pl, "Set Hit Sound", nil, function()
+        local id = hitCustomBox.Text ~= "" and hitCustomBox.Text or hitCustom
+        if id then Rivals.HitSoundId = id; playHitSound(id); Notify("Hit Sound","success","Set")
+        else Notify("Hit Sound","error","Pick or enter ID") end
+    end, 15)
+
+    UI.Divider(pl, 16)
+    UI.Header(pl, "Kill Sound", 17)
+    local killPresets = {
+        ["MANGEKYUO SHARINGAN"] = "11035172280837",
+        ["Renai Circulation"] = "49488412",
+        ["I HATE THIS GAME"] = "18066720",
+        ["Cuyao"] = "112625658963831",
+        ["Chicken"] = "117909139728666",
+    }
+    local killCustom = nil
+    UI.Dropdown(pl, "Preset Kill Sound", {"MANGEKYUO SHARINGAN","Renai Circulation","I HATE THIS GAME","Cuyao","Chicken"}, function(v) killCustom = killPresets[v] end, 18)
+    local killCustomBox = UI.Textbox(pl, "", "Custom Kill Sound ID", function(v) killCustom = v end, 19)
+    UI.Button(pl, "Set Kill Sound", nil, function()
+        local id = killCustomBox.Text ~= "" and killCustomBox.Text or killCustom
+        if id then Rivals.KillSoundId = id; playKillSound(id); Notify("Kill Sound","success","Set")
+        else Notify("Kill Sound","error","Pick or enter ID") end
+    end, 20)
+end
+
+-- ==========================================================
+-- TAB: VISUALS
+-- ==========================================================
+do
+    local vis = tabs["Visuals"]
+    UI.Header(vis, "ESP", 1)
+    UI.Toggle(vis, "Enable ESP", false, function(on)
+        Rivals.ESP = on
+        if on then startESP(); Notify("ESP","success","Enabled")
+        else stopESP(); Notify("ESP","info","Disabled") end
+    end, 2)
+
+    UI.Divider(vis, 3)
+    UI.Header(vis, "Antilag", 4)
+    UI.Toggle(vis, "Full Antilag", false, function(on)
+        Rivals.Antilag = on
+        if on then enableAntilag(); Notify("Antilag","success","Applied")
+        else disableAntilag(); Notify("Antilag","info","Restored") end
+    end, 5)
+
+    UI.Divider(vis, 6)
+    UI.Header(vis, "Lighting", 7)
+    UI.Slider(vis, "Brightness", -100, 100, 0, function(v) if Lighting then pcall(function() Lighting.Brightness = v/100 end) end end, 8)
+    UI.Slider(vis, "Contrast", -100, 100, 0, function(v) if Lighting then pcall(function() Lighting.Contrast = v/100 end) end end, 9)
+    UI.Slider(vis, "Saturation", -100, 100, 0, function(v) if Lighting then pcall(function() Lighting.Saturation = v/100 end) end end, 10)
+
+    UI.Divider(vis, 11)
+    UI.Header(vis, "Cosmetics", 12)
+    local disguiseBox = UI.Textbox(vis, "", "Disguise as Name or UserId", function(_) end, 13)
+    UI.Button(vis, "Apply Disguise", nil, function()
+        local ok = disguiseAs(disguiseBox.Text)
+        if ok then Notify("Disguise","success","Applied") else Notify("Disguise","error","Could not apply") end
+    end, 14)
+    UI.Toggle(vis, "Headless", false, function(on) Rivals.Headless = on; applyHeadless(on) end, 15)
+    UI.Toggle(vis, "Korblox", false, function(on) Rivals.Korblox = on; applyKorblox(on) end, 16)
+end
+
+-- ==========================================================
+-- HOIST: applyAccentColor etc MUST be declared before applyConfig
+-- ==========================================================
+local applyAccentColor
+local applyPanelBaseColor
+local applyTextColor
+local applyCornerRadius
+local colorPickerSwatches = {}
+
+-- ==========================================================
+-- CONFIG SYSTEM
+-- ==========================================================
+local function resolveGlobalFunction(name)
+    local value = nil
+    pcall(function() value = _G[name] end)
+    if type(value) == "function" then return value end
+    local getter = nil
+    pcall(function() getter = getgenv end)
+    if type(getter) == "function" then
+        local ok, env = pcall(getter)
+        if ok and type(env) == "table" and type(env[name]) == "function" then return env[name] end
+    end
+    return nil
+end
+
+local fsRead = resolveGlobalFunction("readfile")
+local fsWrite = resolveGlobalFunction("writefile")
+local fsList = resolveGlobalFunction("listfiles")
+local fsDelete = resolveGlobalFunction("delfile")
+local fsMakeFolder = resolveGlobalFunction("makefolder")
+local fsIsFolder = resolveGlobalFunction("isfolder")
+local fsIsFile = resolveGlobalFunction("isfile")
+local CONFIG_FOLDER = "MingoHubRivals"
+local configMemory = {}
+local selectedConfigName = nil
+local autoLoadConfigName = nil
+local configList = nil
+local configNameBox = nil
+local configExportBox = nil
+local configSelectedLabel = nil
+local configStorePersistent = type(fsRead)=="function" and type(fsWrite)=="function" and type(fsList)=="function" and type(fsDelete)=="function"
+
+local function ensureConfigFolder()
+    if not configStorePersistent then return false end
+    if type(fsIsFolder)=="function" then
+        local ok, exists = pcall(fsIsFolder, CONFIG_FOLDER)
+        if ok and exists then return true end
+    end
+    if type(fsMakeFolder)=="function" then pcall(fsMakeFolder, CONFIG_FOLDER) end
+    return true
+end
+local function sanitizeConfigName(name)
+    name = tostring(name or ""):gsub("^%s+",""):gsub("%s+$","")
+    name = name:gsub("[^%w_%- ]",""):gsub("%s+","_"):sub(1,32)
+    return name
+end
+local function configPath(name) return CONFIG_FOLDER .. "/" .. name .. ".json" end
+
+local function snapshotConfig()
+    local c = Theme.Accent
+    return {
+        Version = 3,
+        Accent = {math.floor(c.R*255+0.5), math.floor(c.G*255+0.5), math.floor(c.B*255+0.5)},
+        Background = currentBGName, BackgroundAssetId = customBackgroundId,
+        BackgroundDim = bgOverlay.BackgroundTransparency,
+        PanelTransparency = main.BackgroundTransparency,
+        PanelBase = {math.floor(panelBaseColor.R*255+0.5), math.floor(panelBaseColor.G*255+0.5), math.floor(panelBaseColor.B*255+0.5)},
+        TextColor = {math.floor(Theme.Text.R*255+0.5), math.floor(Theme.Text.G*255+0.5), math.floor(Theme.Text.B*255+0.5)},
+        WindowSize = windowSizeScale, CornerRadius = cornerRadiusPx,
+        AnimationSpeed = Anim.AnimationSpeed, ImageFit = customImageFit,
+        AnimateBackground = bgAnimated, Animations = Anim.EnableAnimations, GlassBlur = blurEnabled,
+        Rivals = {
+            Aimbot = {Enabled=Rivals.Aimbot.Enabled, Smoothing=Rivals.Aimbot.Smoothing, FOV=Rivals.Aimbot.FOV, HitChance=Rivals.Aimbot.HitChance, Part=Rivals.Aimbot.Part},
+            Silent = {Enabled=Rivals.Silent.Enabled, Part=Rivals.Silent.Part, FOV=Rivals.Silent.FOV},
+            Rage   = {Enabled=Rivals.Rage.Enabled, Priority=Rivals.Rage.Priority},
+            Trigger= {Enabled=Rivals.Trigger.Enabled, Delay=Rivals.Trigger.Delay},
+            WalkSpeed=Rivals.WalkSpeed, JumpPower=Rivals.JumpPower, InfJump=Rivals.InfJump,
+            HitSoundId=Rivals.HitSoundId, KillSoundId=Rivals.KillSoundId,
+            ESP=Rivals.ESP, Antilag=Rivals.Antilag,
+            Headless=Rivals.Headless, Korblox=Rivals.Korblox,
+            TeamCheck=Rivals.TeamCheck,
+        },
+    }
+end
+
+local function readConfig(name)
+    if configMemory[name] then return configMemory[name] end
+    if not configStorePersistent then return nil, "No file storage." end
+    local path = configPath(name)
+    if type(fsIsFile)=="function" then
+        local ok, exists = pcall(fsIsFile, path)
+        if ok and not exists then return nil, "Config not found." end
+    end
+    local ok, raw = pcall(fsRead, path)
+    if not ok or type(raw) ~= "string" then return nil, "Could not read config." end
+    if not HttpService then return nil, "JSON service unavailable." end
+    local decodedOk, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not decodedOk or type(decoded) ~= "table" then return nil, "Config JSON invalid." end
+    return decoded
+end
+
+local function saveConfig(name)
+    name = sanitizeConfigName(name)
+    if name == "" then Notify("Configs","error","Enter a config name."); return false end
+    local data = snapshotConfig()
+    configMemory[name] = data
+    if configStorePersistent then
+        ensureConfigFolder()
+        if not HttpService then Notify("Configs","error","JSON service unavailable."); return false end
+        local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+        if not ok then Notify("Configs","error","Encode failed."); return false end
+        local wrote, err = pcall(fsWrite, configPath(name), encoded)
+        if not wrote then Notify("Configs","error","Save failed: "..tostring(err)); return false end
+    end
+    selectedConfigName = name
+    Notify("Configs","success", configStorePersistent and ("Saved "..name) or ("Saved "..name.." (session)"))
+    return true
+end
+
+local function applyConfig(data)
+    if type(data) ~= "table" then return false, "Invalid config." end
+    if type(data.Accent)=="table" and #data.Accent>=3 then
+        local r,g,b = tonumber(data.Accent[1]),tonumber(data.Accent[2]),tonumber(data.Accent[3])
+        if r and g and b and applyAccentColor then
+            applyAccentColor(Color3.fromRGB(math.clamp(r,0,255),math.clamp(g,0,255),math.clamp(b,0,255)))
+        end
+    end
+    if type(data.PanelBase)=="table" and #data.PanelBase>=3 and applyPanelBaseColor then
+        local r,g,b = tonumber(data.PanelBase[1]),tonumber(data.PanelBase[2]),tonumber(data.PanelBase[3])
+        if r and g and b then applyPanelBaseColor(Color3.fromRGB(math.clamp(r,0,255),math.clamp(g,0,255),math.clamp(b,0,255))) end
+    end
+    if type(data.TextColor)=="table" and #data.TextColor>=3 and applyTextColor then
+        local r,g,b = tonumber(data.TextColor[1]),tonumber(data.TextColor[2]),tonumber(data.TextColor[3])
+        if r and g and b then applyTextColor(Color3.fromRGB(math.clamp(r,0,255),math.clamp(g,0,255),math.clamp(b,0,255))) end
+    end
+    if tonumber(data.WindowSize) then
+        windowSizeScale = math.clamp(tonumber(data.WindowSize), 0.75, 1.2)
+        if animState == "idle" then mainScale.Scale = windowSizeScale end
+        if sliderSetters["Window size"] then sliderSetters["Window size"](math.floor(windowSizeScale*100+0.5), false) end
+    end
+    if tonumber(data.CornerRadius) and applyCornerRadius then
+        applyCornerRadius(math.clamp(tonumber(data.CornerRadius),2,28))
+        if sliderSetters["Corner roundness"] then sliderSetters["Corner roundness"](cornerRadiusPx, false) end
+    end
+    if tonumber(data.AnimationSpeed) then
+        Anim.AnimationSpeed = math.clamp(tonumber(data.AnimationSpeed),0.5,1.6)
+        if sliderSetters["Animation speed"] then sliderSetters["Animation speed"](math.floor(Anim.AnimationSpeed*100+0.5), false) end
+    end
+    Anim.EnableAnimations = data.Animations ~= false
+    blurEnabled = data.GlassBlur ~= false
+    bgAnimated = data.AnimateBackground ~= false
+    if toggleSetters["Animations"] then toggleSetters["Animations"](Anim.EnableAnimations, false) end
+    if toggleSetters["Glass Blur"] then toggleSetters["Glass Blur"](blurEnabled, false) end
+    if toggleSetters["Animate Background"] then toggleSetters["Animate Background"](bgAnimated, false) end
+    if tonumber(data.BackgroundDim) then
+        bgOverlay.BackgroundTransparency = math.clamp(tonumber(data.BackgroundDim),0.15,0.85)
+        if sliderSetters["Background dim"] then sliderSetters["Background dim"](math.floor(bgOverlay.BackgroundTransparency*100+0.5), false) end
+    end
+    if tonumber(data.PanelTransparency) then
+        main.BackgroundTransparency = math.clamp(tonumber(data.PanelTransparency),0,0.85)
+        if sliderSetters["Panel transparency"] then sliderSetters["Panel transparency"](math.floor(main.BackgroundTransparency*100+0.5), false) end
+    end
+    if data.ImageFit == "Crop" or data.ImageFit == "Fit" or data.ImageFit == "Stretch" then
+        customImageFit = data.ImageFit
+        if dropdownSetters["Image fit"] then dropdownSetters["Image fit"](customImageFit, false) end
+    end
+    local bgName = tostring(data.Background or "Default")
+    if bgName == "Custom" and tostring(data.BackgroundAssetId or ""):match("^%d+$") then
+        local ok, err = setCustomBackground(data.BackgroundAssetId)
+        if not ok then return false, err end
+    elseif bgName == "Default" or bgName == "Glitch" then
+        setBackground(bgName)
+    else setBackground("Default") end
+    if dropdownSetters["Background"] then dropdownSetters["Background"](bgName, false) end
+    setBGAnimated(bgAnimated)
+    setBlurActive(main.Visible, false)
+
+    if type(data.Rivals) == "table" then
+        local R = data.Rivals
+        if type(R.Aimbot)=="table" then
+            if type(R.Aimbot.Enabled)=="boolean" and toggleSetters["Enable Aimbot"] then toggleSetters["Enable Aimbot"](R.Aimbot.Enabled, true) end
+            if tonumber(R.Aimbot.Smoothing) and sliderSetters["Aimbot Smoothing"] then sliderSetters["Aimbot Smoothing"](R.Aimbot.Smoothing, false) end
+            if tonumber(R.Aimbot.FOV) and sliderSetters["Aimbot FOV"] then sliderSetters["Aimbot FOV"](R.Aimbot.FOV, false) end
+            if tonumber(R.Aimbot.HitChance) and sliderSetters["Aimbot Hit Chance %"] then sliderSetters["Aimbot Hit Chance %"](R.Aimbot.HitChance, false) end
+            if R.Aimbot.Part and dropdownSetters["Target Part"] then dropdownSetters["Target Part"](R.Aimbot.Part, false) end
+        end
+        if type(R.Silent)=="table" then
+            if type(R.Silent.Enabled)=="boolean" and toggleSetters["Enable Silent Aim"] then toggleSetters["Enable Silent Aim"](R.Silent.Enabled, true) end
+            if R.Silent.Part and dropdownSetters["Silent Target"] then dropdownSetters["Silent Target"](R.Silent.Part, false) end
+            if tonumber(R.Silent.FOV) and sliderSetters["Silent FOV"] then sliderSetters["Silent FOV"](R.Silent.FOV, false) end
+        end
+        if type(R.Rage)=="table" then
+            if type(R.Rage.Enabled)=="boolean" and toggleSetters["Enable RageBot"] then toggleSetters["Enable RageBot"](R.Rage.Enabled, true) end
+            if R.Rage.Priority and dropdownSetters["Weapon Priority"] then dropdownSetters["Weapon Priority"](R.Rage.Priority, false) end
+        end
+        if type(R.Trigger)=="table" then
+            if type(R.Trigger.Enabled)=="boolean" and toggleSetters["Enable Trigger Bot"] then toggleSetters["Enable Trigger Bot"](R.Trigger.Enabled, true) end
+            if tonumber(R.Trigger.Delay) and sliderSetters["Trigger Delay (ms)"] then sliderSetters["Trigger Delay (ms)"](R.Trigger.Delay, false) end
+        end
+        if tonumber(R.WalkSpeed) and sliderSetters["WalkSpeed"] then sliderSetters["WalkSpeed"](R.WalkSpeed, false) end
+        if tonumber(R.JumpPower) and sliderSetters["JumpPower"] then sliderSetters["JumpPower"](R.JumpPower, false) end
+        if type(R.InfJump)=="boolean" and toggleSetters["Infinite Jump"] then toggleSetters["Infinite Jump"](R.InfJump, false) end
+        if R.HitSoundId then Rivals.HitSoundId = R.HitSoundId end
+        if R.KillSoundId then Rivals.KillSoundId = R.KillSoundId end
+        if type(R.ESP)=="boolean" and toggleSetters["Enable ESP"] then toggleSetters["Enable ESP"](R.ESP, true) end
+        if type(R.Antilag)=="boolean" and toggleSetters["Full Antilag"] then toggleSetters["Full Antilag"](R.Antilag, true) end
+        if type(R.Headless)=="boolean" and toggleSetters["Headless"] then toggleSetters["Headless"](R.Headless, false) end
+        if type(R.Korblox)=="boolean" and toggleSetters["Korblox"] then toggleSetters["Korblox"](R.Korblox, false) end
+        if type(R.TeamCheck)=="boolean" and toggleSetters["Team Check (TDM only)"] then toggleSetters["Team Check (TDM only)"](R.TeamCheck, false) end
+    end
+    return true
+end
+
+local function getConfigNames()
+    local names, seen = {}, {}
+    local function addName(rawName)
+        local name = sanitizeConfigName(rawName); if name == "" then return end
+        local key = string.lower(name)
+        if not seen[key] then seen[key] = true; table.insert(names, name) end
+    end
+    for name in pairs(configMemory) do addName(name) end
+    if configStorePersistent then
+        ensureConfigFolder()
+        local ok, files = pcall(fsList, CONFIG_FOLDER)
+        if ok and type(files) == "table" then
+            for _, path in ipairs(files) do
+                local normalizedPath = tostring(path):gsub("\\", "/")
+                local baseName = normalizedPath:match("([^/]+)$") or normalizedPath
+                local fileName = baseName:match("^(.-)%.json$")
+                if fileName and string.lower(fileName) ~= "autoload" then addName(fileName) end
+            end
+        end
+    end
+    table.sort(names, function(a, b) return string.lower(a) < string.lower(b) end)
+    return names
+end
+
+local function updateConfigList()
+    if not configList then return end
+    for _, child in ipairs(configList:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
+    if configSelectedLabel then
+        local selectedText = selectedConfigName and ("SELECTED CONFIG  ·  " .. selectedConfigName) or "SELECTED CONFIG  ·  NONE"
+        configSelectedLabel.Text = selectedText
+        configSelectedLabel.TextColor3 = selectedConfigName and Theme.Accent or Theme.TextDim
+    end
+    local names = getConfigNames()
+    if #names == 0 then UI.Label(configList, "No saved configs", 1, Theme.TextDim); return end
+    for index, name in ipairs(names) do
+        local configName = name
+        local isSelected = selectedConfigName ~= nil and string.lower(configName) == string.lower(selectedConfigName)
+        local row = new("Frame", {Name="ConfigEntry_"..configName, Size=UDim2.new(1,0,0,42), BackgroundColor3=isSelected and Theme.Bg3 or Theme.Bg2, BackgroundTransparency=isSelected and 0.08 or 0.18, BorderSizePixel=0, LayoutOrder=index, Parent=configList})
+        corner(row, UDim.new(0, 8))
+        local rowOutline = stroke(row, isSelected and Theme.Accent or Theme.Stroke, isSelected and 2 or 1)
+        rowOutline.Transparency = isSelected and 0.02 or 0.72
+        new("TextLabel", {Text=configName, Font=Theme.FontBold, TextSize=12, TextColor3=isSelected and Theme.Text or Theme.TextDim, TextXAlignment=Enum.TextXAlignment.Left, BackgroundTransparency=1, Position=UDim2.new(0,12,0,0), Size=UDim2.new(1,-92,1,0), ZIndex=2, Parent=row})
+        if isSelected then
+            new("TextLabel", {Text="✓ SELECTED", Font=Theme.FontBold, TextSize=9, TextColor3=Theme.Accent, TextXAlignment=Enum.TextXAlignment.Right, BackgroundTransparency=1, Position=UDim2.new(1,-88,0,0), Size=UDim2.fromOffset(78,42), ZIndex=2, Parent=row})
+        end
+        local hit = new("TextButton", {Name="SelectConfig", Text="", BackgroundTransparency=1, BorderSizePixel=0, AutoButtonColor=false, Size=UDim2.fromScale(1,1), ZIndex=3, Parent=row})
+        hit.Activated:Connect(function() selectedConfigName = configName; if configNameBox then configNameBox.Text = configName end; updateConfigList() end)
+    end
+end
+
+local function setAutoLoad(name)
+    autoLoadConfigName = name
+    if configStorePersistent and HttpService then
+        ensureConfigFolder()
+        local path = CONFIG_FOLDER .. "/AutoLoad.json"
+        if name and name ~= "" then
+            local encodedOk, encoded = pcall(function() return HttpService:JSONEncode({Name=name}) end)
+            if encodedOk then pcall(fsWrite, path, encoded) end
+        elseif type(fsIsFile) == "function" then
+            local ok, exists = pcall(fsIsFile, path)
+            if ok and exists then pcall(fsDelete, path) end
+        else pcall(fsDelete, path) end
+    end
+    Notify("Configs","success", name and ("Auto-load set to "..name) or "Auto-load disabled")
+end
+
+local function loadConfig(name)
+    name = sanitizeConfigName(name)
+    if name == "" then Notify("Configs","error","Select a config first."); return false end
+    local data, err = readConfig(name)
+    if not data then Notify("Configs","error",err or "Load failed."); return false end
+    local ok, applyErr = applyConfig(data)
+    if not ok then Notify("Configs","error",applyErr or "Apply failed."); return false end
+    selectedConfigName = name
+    Notify("Configs","success","Loaded "..name)
+    updateConfigList()
+    return true
+end
+
+local function exportConfig(name)
+    local data, err
+    name = sanitizeConfigName(name or selectedConfigName or "")
+    if name ~= "" then
+        data, err = readConfig(name)
+        if not data then Notify("Configs", "error", err or "Export failed."); return false end
+    else data = snapshotConfig() end
+    if not HttpService then Notify("Configs", "error", "JSON service unavailable."); return false end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+    if not ok or type(encoded) ~= "string" then Notify("Configs", "error", "Encode failed."); return false end
+    if configExportBox then configExportBox.Text = encoded end
+    local clipboard = resolveGlobalFunction("setclipboard") or resolveGlobalFunction("toclipboard")
+    if clipboard then
+        local copied = pcall(clipboard, encoded)
+        if copied then Notify("Configs", "success", "Copied to clipboard."); return true end
+    end
+    Notify("Configs", "info", "Export JSON shown below.")
+    return true
+end
+
+local function deleteConfig(name)
+    name = sanitizeConfigName(name)
+    if name == "" then Notify("Configs","error","Select a config first."); return end
+    if configStorePersistent then
+        local path = configPath(name)
+        local ok, err = pcall(fsDelete, path)
+        if not ok then Notify("Configs","error","Delete failed: "..tostring(err)); return end
+    end
+    configMemory[name] = nil
+    if autoLoadConfigName == name then setAutoLoad(nil) end
+    if selectedConfigName == name then selectedConfigName = nil end
+    Notify("Configs","success","Deleted "..name)
+    updateConfigList()
+end
+
+if configStorePersistent and HttpService then
+    local path = CONFIG_FOLDER .. "/AutoLoad.json"
+    local ok, raw = pcall(fsRead, path)
+    if ok and type(raw)=="string" then
+        local decodedOk, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+        if decodedOk and type(decoded)=="table" and type(decoded.Name)=="string" then
+            autoLoadConfigName = sanitizeConfigName(decoded.Name)
+        end
+    end
+end
+
+-- ==========================================================
+-- TAB: MISC (theme + reset)
+-- ==========================================================
+do
+    local st = tabs["Misc"]
+    UI.Header(st, "Appearance", 1)
+    UI.Slider(st, "Accent Hue", 0, 360, 210, function(v)
+        local color = Color3.fromHSV(v/360, 0.72, 1)
+        if applyAccentColor then applyAccentColor(color) end
+    end, 2)
+    UI.Toggle(st, "Animations", true, function(on) Anim.EnableAnimations = on end, 3)
+    UI.Toggle(st, "Glass Blur", true, function(on) blurEnabled = on; setBlurActive(main.Visible, false) end, 4)
+    UI.Slider(st, "Panel transparency", 10, 75, 35, function(v) main.BackgroundTransparency = v / 100 end, 5)
+
+    UI.Divider(st, 6)
+    UI.Header(st, "Background", 7)
+    UI.Dropdown(st, "Background", BackgroundOrder, function(opt) setBackground(opt) end, 8)
+    UI.Dropdown(st, "Image fit", {"Crop","Fit","Stretch"}, function(opt) customImageFit = opt; if currentBGName == "Custom" then setCustomBackground(customBackgroundId) end end, 9)
+    local backgroundIdBox = UI.Textbox(st, "", "Custom Roblox image asset ID", function(_) end, 10)
+    UI.Button(st, "Apply custom background", nil, function()
+        local ok, err = setCustomBackground(backgroundIdBox.Text)
+        if ok then Notify("Background","success","Applied") else Notify("Background","error",err) end
+    end, 11)
+    UI.Button(st, "Reset background", nil, function() customBackgroundId = ""; setBackground("Default"); Notify("Background","success","Reset") end, 12)
+    UI.Slider(st, "Background dim", 15, 85, 48, function(v) bgOverlay.BackgroundTransparency = v / 100 end, 13)
+    UI.Toggle(st, "Animate Background", true, function(on) setBGAnimated(on) end, 14)
+
+    UI.Divider(st, 15)
+    UI.Header(st, "Theme & Colors", 16)
+    local function addRGBPicker(title, initialColor, applyColor, baseOrder)
+        local swatch = new("Frame", {Size=UDim2.new(1,0,0,22), BackgroundColor3=initialColor, BorderSizePixel=0, LayoutOrder=baseOrder, Parent=st})
+        corner(swatch, UDim.new(0, 7)); stroke(swatch, Theme.Stroke, 1)
+        colorPickerSwatches[title] = swatch
+        local channels = {
+            R = math.floor(initialColor.R * 255 + 0.5),
+            G = math.floor(initialColor.G * 255 + 0.5),
+            B = math.floor(initialColor.B * 255 + 0.5),
+        }
+        local function update()
+            local color = Color3.fromRGB(channels.R, channels.G, channels.B)
+            if applyColor then applyColor(color) end
+            swatch.BackgroundColor3 = color
+        end
+        UI.Slider(st, title .. " · Red", 0, 255, channels.R, function(v) channels.R = v; update() end, baseOrder + 1)
+        UI.Slider(st, title .. " · Green", 0, 255, channels.G, function(v) channels.G = v; update() end, baseOrder + 2)
+        UI.Slider(st, title .. " · Blue", 0, 255, channels.B, function(v) channels.B = v; update() end, baseOrder + 3)
+    end
+
+    applyAccentColor = function(color)
+        local oldAccent, oldStroke = Theme.Accent, Theme.Stroke
+        Theme.Accent, Theme.Stroke, Config.Accent, Neon.Cyan = color, color, color, color
+        for _, obj in ipairs(screen:GetDescendants()) do
+            if obj:IsA("UIStroke") then obj.Color = color
+            elseif obj:IsA("GuiObject") and (obj.BackgroundColor3 == oldAccent or obj.BackgroundColor3 == oldStroke) then obj.BackgroundColor3 = color end
+        end
+        if colorPickerSwatches["Accent color"] then colorPickerSwatches["Accent color"].BackgroundColor3 = color end
+        if activeTab then setTabVisual(activeTab, true) end
+    end
+    applyPanelBaseColor = function(color)
+        local old = {Theme.Bg, Theme.Bg2, Theme.Bg3, Theme.Bg4}
+        local dark = Color3.new(0,0,0)
+        local palette = {color:Lerp(dark,0.78), color:Lerp(dark,0.58), color:Lerp(dark,0.38), color:Lerp(dark,0.18)}
+        for _, obj in ipairs(screen:GetDescendants()) do
+            if obj:IsA("GuiObject") then
+                for i, oldColor in ipairs(old) do
+                    if obj.BackgroundColor3 == oldColor then obj.BackgroundColor3 = palette[i]; break end
+                end
+            end
+        end
+        Theme.Bg, Theme.Bg2, Theme.Bg3, Theme.Bg4 = palette[1], palette[2], palette[3], palette[4]
+        panelBaseColor = color
+        main.BackgroundColor3 = Theme.Bg; bgProcedural.BackgroundColor3 = Theme.Bg
+        if colorPickerSwatches["Panel color"] then colorPickerSwatches["Panel color"].BackgroundColor3 = color end
+    end
+    applyTextColor = function(color)
+        local oldText, oldDim = Theme.Text, Theme.TextDim
+        local newDim = color:Lerp(Theme.Bg, 0.34)
+        for _, obj in ipairs(screen:GetDescendants()) do
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                if obj.TextColor3 == oldText then obj.TextColor3 = color
+                elseif obj.TextColor3 == oldDim then obj.TextColor3 = newDim end
+            end
+        end
+        Theme.Text, Theme.TextDim = color, newDim
+        if colorPickerSwatches["Text color"] then colorPickerSwatches["Text color"].BackgroundColor3 = color end
+    end
+    applyCornerRadius = function(value)
+        cornerRadiusPx = math.clamp(math.floor(value + 0.5), 2, 28)
+        for _, obj in ipairs(screen:GetDescendants()) do
+            if obj:IsA("UICorner") and obj.CornerRadius.Scale == 0 then obj.CornerRadius = UDim.new(0, cornerRadiusPx) end
+        end
+    end
+
+    addRGBPicker("Accent color", Theme.Accent, function(c) if applyAccentColor then applyAccentColor(c) end end, 17)
+    addRGBPicker("Panel color", panelBaseColor, function(c) if applyPanelBaseColor then applyPanelBaseColor(c) end end, 21)
+    addRGBPicker("Text color", Theme.Text, function(c) if applyTextColor then applyTextColor(c) end end, 25)
+
+    UI.Divider(st, 29)
+    UI.Header(st, "More UI Customization", 30)
+    UI.Slider(st, "Window size", 75, 120, 100, function(v)
+        windowSizeScale = v / 100
+        if animState == "idle" then playTween(mainScale, {Scale = windowSizeScale}, 0.16) end
+    end, 31)
+    UI.Slider(st, "Corner roundness", 2, 28, cornerRadiusPx, function(v)
+        if applyCornerRadius then applyCornerRadius(v) end
+    end, 32)
+    UI.Slider(st, "Animation speed", 50, 160, 100, function(v) Anim.AnimationSpeed = v / 100 end, 33)
+
+    UI.Divider(st, 34)
+    UI.Header(st, "Rivals Reset", 35)
+    UI.Button(st, "Reset Rivals Gameplay Settings", "Toggles, sliders, sounds — not UI theme", function()
+        Rivals.Aimbot.Enabled=false; Rivals.Aimbot.Smoothing=5; Rivals.Aimbot.FOV=90; Rivals.Aimbot.HitChance=100; Rivals.Aimbot.Part="Head"
+        Rivals.Silent.Enabled=false; Rivals.Silent.Part="Head"; Rivals.Silent.FOV=180
+        Rivals.Rage.Enabled=false; Rivals.Rage.Priority="Current Weapon"
+        Rivals.Trigger.Enabled=false; Rivals.Trigger.Delay=0
+        Rivals.WalkSpeed=16; Rivals.JumpPower=16; Rivals.InfJump=false
+        Rivals.HitSoundId=""; Rivals.KillSoundId=""
+        Rivals.ESP=false; Rivals.Antilag=false
+        Rivals.Headless=false; Rivals.Korblox=false
+        Rivals.TeamCheck=true
+        stopAimbot(); stopTrigger(); stopRage(); stopESP(); disableAntilag()
+        if toggleSetters["Enable Aimbot"] then toggleSetters["Enable Aimbot"](false, false) end
+        if toggleSetters["Enable Silent Aim"] then toggleSetters["Enable Silent Aim"](false, false) end
+        if toggleSetters["Enable RageBot"] then toggleSetters["Enable RageBot"](false, false) end
+        if toggleSetters["Enable Trigger Bot"] then toggleSetters["Enable Trigger Bot"](false, false) end
+        if toggleSetters["Enable ESP"] then toggleSetters["Enable ESP"](false, false) end
+        if toggleSetters["Full Antilag"] then toggleSetters["Full Antilag"](false, false) end
+        if toggleSetters["Infinite Jump"] then toggleSetters["Infinite Jump"](false, false) end
+        if toggleSetters["Headless"] then toggleSetters["Headless"](false, false) end
+        if toggleSetters["Korblox"] then toggleSetters["Korblox"](false, false) end
+        if toggleSetters["Team Check (TDM only)"] then toggleSetters["Team Check (TDM only)"](true, false) end
+        if sliderSetters["WalkSpeed"] then sliderSetters["WalkSpeed"](16, false) end
+        if sliderSetters["JumpPower"] then sliderSetters["JumpPower"](16, false) end
+        if sliderSetters["Aimbot Smoothing"] then sliderSetters["Aimbot Smoothing"](5, false) end
+        if sliderSetters["Aimbot FOV"] then sliderSetters["Aimbot FOV"](90, false) end
+        if sliderSetters["Aimbot Hit Chance %"] then sliderSetters["Aimbot Hit Chance %"](100, false) end
+        if sliderSetters["Trigger Delay (ms)"] then sliderSetters["Trigger Delay (ms)"](0, false) end
+        applyMovement(); updateSilentStatus()
+        Notify("Rivals","success","Gameplay reset")
+    end, 36)
+end
+
+setBackground("Default")
+
+-- ==========================================================
+-- TAB: CONFIGS
+-- ==========================================================
+do
+    local cfg = tabs["Configs"]
+    UI.Header(cfg, "Configuration Manager", 1)
+    UI.Label(cfg, configStorePersistent and "Local config storage available" or "Session-only storage", 2, configStorePersistent and Theme.Success or Theme.Warn)
+    configSelectedLabel = UI.Label(cfg, "SELECTED CONFIG  ·  NONE", 3, Theme.TextDim)
+    configNameBox = UI.Textbox(cfg, "", "New config name", function(_) end, 4)
+    UI.Button(cfg, "Create config", nil, function()
+        local name = sanitizeConfigName(configNameBox.Text)
+        if name == "" then Notify("Configs","error","Enter a name."); return end
+        if saveConfig(name) then updateConfigList() end
+    end, 5)
+    UI.Button(cfg, "Save selected config", nil, function()
+        local name = selectedConfigName or sanitizeConfigName(configNameBox.Text)
+        if name == "" then Notify("Configs","error","Select or enter a name."); return end
+        if saveConfig(name) then updateConfigList() end
+    end, 6)
+    UI.Button(cfg, "Load selected config", nil, function()
+        local name = selectedConfigName or sanitizeConfigName(configNameBox.Text)
+        loadConfig(name)
+    end, 7)
+    UI.Button(cfg, "Delete selected config", nil, function()
+        local name = selectedConfigName or sanitizeConfigName(configNameBox.Text)
+        deleteConfig(name)
+    end, 8)
+    UI.Toggle(cfg, "Auto-load selected config", autoLoadConfigName ~= nil, function(on)
+        local name = selectedConfigName or sanitizeConfigName(configNameBox.Text)
+        if on then
+            if name == "" then
+                Notify("Configs","error","Select a saved config first.")
+                if toggleSetters["Auto-load selected config"] then toggleSetters["Auto-load selected config"](false, false) end
+                return
+            end
+            setAutoLoad(name)
+        else setAutoLoad(nil) end
+    end, 9)
+    UI.Divider(cfg, 10)
+    UI.Header(cfg, "Saved Configs", 11)
+    configList = UI.ScrollList(cfg, 176, 12)
+    updateConfigList()
+    UI.Divider(cfg, 13)
+    UI.Header(cfg, "Export", 14)
+    UI.Button(cfg, "Export selected config", nil, function()
+        local name = selectedConfigName or sanitizeConfigName(configNameBox.Text)
+        if name == "" then Notify("Configs","error","Select a config."); return end
+        exportConfig(name)
+    end, 15)
+    UI.Button(cfg, "Export current settings", nil, function() exportConfig("") end, 16)
+    configExportBox = new("TextBox", {
+        Text = "", PlaceholderText = "Exported configuration JSON…",
+        Font = Theme.FontMono, TextSize = 10, TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextDim,
+        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true, MultiLine = true, ClearTextOnFocus = false,
+        BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 96), LayoutOrder = 17, Parent = cfg,
+    })
+    corner(configExportBox, UDim.new(0, 8))
+    stroke(configExportBox, Theme.Stroke, 1)
+    pad(configExportBox, 8, 8)
+end
+
+if autoLoadConfigName and autoLoadConfigName ~= "" then pcall(loadConfig, autoLoadConfigName) end
+
+-- ==========================================================
+-- TAB: INFORMATION
+-- ==========================================================
+do
+    local inf = tabs["Information"]
+    UI.Header(inf, "About", 1)
+    local card = new("Frame", {Size=UDim2.new(1,0,0,200), BackgroundColor3=Theme.Bg2, BorderSizePixel=0, LayoutOrder=2, Parent=inf})
+    corner(card, UDim.new(0, 10)); stroke(card, Theme.Stroke); pad(card, 12)
+    new("TextLabel", {
+        Text = ("MingoHub-Rivals v1.1\n\nExecutor: %s\nClipboard: %s\n\nAimbot · Silent · Rage · Trigger · ESP\nAntilag · Movement · Sounds · Cosmetics\nTeam check (TDM-aware) — default ON\nRound mode auto-detects FFA / TDM\n\nConfigs serialize Rivals state."):format(identifyExec, hasClipboard and "yes" or "no"),
+        Font = Theme.Font, TextSize = 12, TextColor3 = Theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true, BackgroundTransparency = 1, Size = UDim2.fromScale(1,1), Parent = card,
+    })
+end
+
+-- ==========================================================
+-- INITIAL TAB
+-- ==========================================================
+do
+    local first = Config.Tabs[1]
+    activeTab = first
+    for name, entry in pairs(tabFrames) do
+        local isFirst = (name == first)
+        entry.Group.Visible = isFirst
+        entry.Group.GroupTransparency = isFirst and 0 or 1
+        entry.Group.Position = UDim2.fromOffset(0, 0)
+        entry.Scroll.ScrollingEnabled = isFirst
+    end
+    for name, btn in pairs(tabButtons) do
+        if name == first then
+            btn.TextColor3 = Theme.Text; btn.BackgroundColor3 = Theme.Bg3
+            local outline = tabButtonStrokes[name]
+            if outline then outline.Color = Neon.Cyan; outline.Thickness = 1.8; outline.Transparency = 0.06 end
+        else
+            btn.TextColor3 = Theme.TextDim; btn.BackgroundColor3 = Theme.Bg2
+            local outline = tabButtonStrokes[name]
+            if outline then outline.Color = Theme.Stroke; outline.Thickness = 0.85; outline.Transparency = 0.78 end
+        end
+    end
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    local q = searchBox.Text:lower()
+    for name,btn in pairs(tabButtons) do btn.Visible = (q=="" or name:lower():find(q,1,true)~=nil) end
+end)
+
+-- ==========================================================
+-- GLASS DOCK
+-- ==========================================================
+local dockConnections = {}
+local function disconnectDockInput()
+    for _, connection in ipairs(dockConnections) do pcall(function() connection:Disconnect() end) end
+    table.clear(dockConnections)
+end
+
+local function createGlassDock()
+    if bubble and bubble.Parent then return bubble end
+    local viewport = camera and camera.ViewportSize or screen.AbsoluteSize
+    local uiScale = math.max(rootScale and rootScale.Scale or 1, 0.05)
+    local localViewport = Vector2.new(viewport.X / uiScale, viewport.Y / uiScale)
+    local dockW = math.clamp(localViewport.X * 0.48, 180, 212)
+    local dockH = 56
+    local startY = isMobile() and 64 or 18
+    local startCenterX = localViewport.X * 0.5
+    bubble = new("Frame", {Name="MingoHubGlassDock", Size=UDim2.fromOffset(dockW,dockH), Position=UDim2.fromOffset(startCenterX,startY), AnchorPoint=Vector2.new(0.5,0), BackgroundColor3=Color3.fromRGB(4,10,23), BackgroundTransparency=0.14, BorderSizePixel=0, Active=true, Visible=false, ZIndex=20, Parent=screen})
+    corner(bubble, UDim.new(1, 0))
+    local dockStroke = stroke(bubble, Neon.Cyan, 1.5); dockStroke.Transparency = 0.12
+    new("UIGradient", {Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(5,38,55)),ColorSequenceKeypoint.new(0.42,Color3.fromRGB(5,13,30)),ColorSequenceKeypoint.new(1,Color3.fromRGB(37,7,45))}),Rotation=12,Parent=bubble})
+    local arrowPad = new("Frame", {Name="MoveArrows", Size=UDim2.fromOffset(42,42), Position=UDim2.new(1,-7,0.5,0), AnchorPoint=Vector2.new(1,0.5), BackgroundColor3=Color3.fromRGB(0,104,127), BackgroundTransparency=0.22, BorderSizePixel=0, ZIndex=22, Parent=bubble})
+    corner(arrowPad, UDim.new(1, 0))
+    local arrowStroke = stroke(arrowPad, Neon.Cyan, 1); arrowStroke.Transparency = 0.16
+    local function arrow(text, position)
+        new("TextLabel", {Text=text,Font=Theme.FontBold,TextSize=11,TextColor3=Color3.fromRGB(240,254,255),BackgroundTransparency=1,Position=position,Size=UDim2.fromOffset(14,14),ZIndex=23,Parent=arrowPad})
+    end
+    arrow("↑", UDim2.new(0.5,-7,0,0)); arrow("↓", UDim2.new(0.5,-7,1,-14))
+    arrow("←", UDim2.new(0,0,0.5,-7)); arrow("→", UDim2.new(1,-14,0.5,-7))
+    new("TextLabel", {Text="MingoHub-Rivals",Font=Theme.FontBold,TextSize=14,TextColor3=Color3.fromRGB(245,252,255),TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,Position=UDim2.new(0,16,0,0),Size=UDim2.new(1,-76,1,0),ZIndex=22,Parent=bubble})
+    local dockScale = new("UIScale", {Scale=1, Parent=bubble})
+    local hitbox = new("TextButton", {Name="DockInputHitbox",Text="",TextTransparency=1,BackgroundTransparency=1,BorderSizePixel=0,AutoButtonColor=false,Active=true,Selectable=true,Position=UDim2.fromScale(0,0),Size=UDim2.fromScale(1,1),ZIndex=30,Parent=bubble})
+    local arrowGrip = new("TextButton", {Name="ArrowDragGrip",Text="",BackgroundTransparency=1,BorderSizePixel=0,AutoButtonColor=false,Active=true,Selectable=false,Position=arrowPad.Position,AnchorPoint=arrowPad.AnchorPoint,Size=arrowPad.Size,ZIndex=32,Parent=bubble})
+    hitbox.MouseEnter:Connect(function() playTween(dockScale, {Scale=1.035}, 0.16); playTween(bubble, {BackgroundTransparency=0.035}, 0.16); playTween(arrowPad, {BackgroundTransparency=0.12}, 0.16) end)
+    hitbox.MouseLeave:Connect(function() playTween(dockScale, {Scale=1}, 0.18); playTween(bubble, {BackgroundTransparency=0.10}, 0.18); playTween(arrowPad, {BackgroundTransparency=0.22}, 0.18) end)
+    local dragging, dragMoved, dragStart, dragOrigin = false, false, nil, nil
+    local activePointerType = nil
+    local tapStart, tapPointerType, tapMoved = nil, nil, false
+    local function reopenFromDock()
+        if closed or not bubble or not bubble.Parent or not bubble.Visible then return end
+        bubble.Visible = false
+        task.spawn(function()
+            local deadline = os.clock() + 1.5
+            while not closed and animState ~= "idle" and os.clock() < deadline do task.wait() end
+            if closed then return end
+            if not main.Visible then pcall(animateShow) end
+        end)
+    end
+    local function getDockViewport()
+        local vp = camera and camera.ViewportSize or screen.AbsoluteSize
+        local scale = math.max(rootScale and rootScale.Scale or 1, 0.05)
+        return Vector2.new(vp.X / scale, vp.Y / scale)
+    end
+    local function clampDockPosition(centerX, top)
+        local vp = getDockViewport()
+        local width, height = bubble.Size.X.Offset, bubble.Size.Y.Offset
+        local minCenter = width * 0.5 + 4
+        local maxCenter = math.max(minCenter, vp.X - width * 0.5 - 4)
+        local maxY = math.max(4, vp.Y - height - 4)
+        return math.clamp(centerX, minCenter, maxCenter), math.clamp(top, 4, maxY)
+    end
+    local function beginTap(input)
+        local t = input.UserInputType
+        if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch then return end
+        tapStart = Vector2.new(input.Position.X, input.Position.Y); tapPointerType = t; tapMoved = false
+    end
+    local function beginDrag(input)
+        local t = input.UserInputType
+        if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch then return end
+        dragging = true; dragMoved = false; activePointerType = t
+        dragStart = Vector2.new(input.Position.X, input.Position.Y)
+        tapStart, tapPointerType = nil, nil
+        local vp = getDockViewport()
+        dragOrigin = Vector2.new(bubble.Position.X.Scale * vp.X + bubble.Position.X.Offset, bubble.Position.Y.Scale * vp.Y + bubble.Position.Y.Offset)
+    end
+    local function movePointer(input)
+        local pointer = nil
+        if activePointerType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement then pointer = Vector2.new(input.Position.X, input.Position.Y)
+        elseif activePointerType == Enum.UserInputType.Touch and input.UserInputType == Enum.UserInputType.Touch then pointer = Vector2.new(input.Position.X, input.Position.Y) end
+        if dragging and pointer and dragStart and dragOrigin then
+            local scale = math.max(rootScale and rootScale.Scale or 1, 0.05)
+            local delta = (pointer - dragStart) / scale
+            if delta.Magnitude > 6 then dragMoved = true end
+            if dragMoved then
+                local cx, ty = clampDockPosition(dragOrigin.X + delta.X, dragOrigin.Y + delta.Y)
+                bubble.Position = UDim2.fromOffset(cx, ty)
+            end
+        end
+        if tapStart then
+            local tp = nil
+            if tapPointerType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement then tp = Vector2.new(input.Position.X, input.Position.Y)
+            elseif tapPointerType == Enum.UserInputType.Touch and input.UserInputType == Enum.UserInputType.Touch then tp = Vector2.new(input.Position.X, input.Position.Y) end
+            if tp and (tp - tapStart).Magnitude > 10 then tapMoved = true end
+        end
+    end
+    local function endPointer(input)
+        local rm = input.UserInputType == Enum.UserInputType.MouseButton1
+        local rt = input.UserInputType == Enum.UserInputType.Touch
+        if dragging then
+            local match = (activePointerType == Enum.UserInputType.MouseButton1 and rm) or (activePointerType == Enum.UserInputType.Touch and rt)
+            if match then
+                dragging = false; local wasDragged = dragMoved
+                dragMoved, dragStart, dragOrigin, activePointerType = false, nil, nil, nil
+                if not wasDragged then reopenFromDock() end
+            end
+            return
+        end
+        local mt = (tapPointerType == Enum.UserInputType.MouseButton1 and rm) or (tapPointerType == Enum.UserInputType.Touch and rt)
+        if mt then
+            local shouldOpen = not tapMoved
+            tapStart, tapPointerType, tapMoved = nil, nil, false
+            if shouldOpen then reopenFromDock() end
+        end
+    end
+    hitbox.InputBegan:Connect(beginTap)
+    arrowGrip.InputBegan:Connect(beginDrag)
+    if UserInputService then
+        table.insert(dockConnections, UserInputService.InputChanged:Connect(movePointer))
+        table.insert(dockConnections, UserInputService.InputEnded:Connect(endPointer))
+    end
+    bubble.AncestryChanged:Connect(function(_, parent) if parent == nil then disconnectDockInput() end end)
+    return bubble
+end
+
+btnMin.Activated:Connect(function()
+    if animState ~= "idle" or closed then return end
+    local dock = createGlassDock()
+    animateHide(function()
+        if dock and dock.Parent and not closed then
+            dock.Visible = true
+            local scale = dock:FindFirstChildOfClass("UIScale")
+            if scale then scale.Scale = 0.72; playTween(scale, {Scale=1}, 0.46, Enum.EasingStyle.Back, Enum.EasingDirection.Out) end
+            dock.BackgroundTransparency = 0.48
+            playTween(dock, {BackgroundTransparency = 0.10}, 0.34, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        end
+    end)
+end)
+
+if camera then camera:GetPropertyChangedSignal("ViewportSize"):Connect(recomputeRootScale) end
+if UserInputService then
+    UserInputService:GetPropertyChangedSignal("TouchEnabled"):Connect(recomputeRootScale)
+    UserInputService:GetPropertyChangedSignal("MouseEnabled"):Connect(recomputeRootScale)
+end
+
+-- ==========================================================
+-- INTRO SPLASH
+-- ==========================================================
+local splashConn = nil
+local splashOverlay = nil
+local introFinished = false
+
+local function playIntroSplash()
+    setBlurActive(false, true)
+    local overlay = new("Frame", {Name="MingoHubIntroSplash", Size=UDim2.fromScale(1,1), BackgroundColor3=Color3.fromRGB(1,3,12), BackgroundTransparency=1, BorderSizePixel=0, ZIndex=100, Parent=screen})
+    splashOverlay = overlay
+    local card = new("Frame", {Name="SplashCard", Size=UDim2.fromOffset(370,224), Position=UDim2.new(0.5,0,0.5,38), AnchorPoint=Vector2.new(0.5,0.5), BackgroundColor3=Color3.fromRGB(4,9,23), BackgroundTransparency=0.04, BorderSizePixel=0, ZIndex=101, Parent=overlay})
+    corner(card, UDim.new(0, 22))
+    local cardStroke = stroke(card, Neon.Cyan, 1.7); cardStroke.Transparency = 1
+    new("UIGradient", {Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(5,34,53)),ColorSequenceKeypoint.new(0.52,Color3.fromRGB(4,9,25)),ColorSequenceKeypoint.new(1,Color3.fromRGB(28,7,40))}),Rotation=0,Parent=card})
+    local halo = new("Frame", {Name="SplashHalo", Size=UDim2.fromOffset(84,84), Position=UDim2.new(0.5,0,0,12), AnchorPoint=Vector2.new(0.5,0), BackgroundColor3=Neon.Blue, BackgroundTransparency=0.83, BorderSizePixel=0, ZIndex=102, Parent=card})
+    corner(halo, UDim.new(1, 0))
+    local outerRing = new("Frame", {Name="OuterNeonRing", Size=UDim2.fromOffset(78,78), Position=UDim2.new(0.5,0,0,15), AnchorPoint=Vector2.new(0.5,0), BackgroundTransparency=1, BorderSizePixel=0, ZIndex=103, Parent=card})
+    corner(outerRing, UDim.new(1, 0))
+    local outerStroke = stroke(outerRing, Neon.Magenta, 2); outerStroke.Transparency = 1
+    local innerRing = new("Frame", {Name="InnerNeonRing", Size=UDim2.fromOffset(64,64), Position=UDim2.new(0.5,0,0,22), AnchorPoint=Vector2.new(0.5,0), BackgroundTransparency=1, BorderSizePixel=0, ZIndex=103, Parent=card})
+    corner(innerRing, UDim.new(1, 0))
+    local innerStroke = stroke(innerRing, Neon.Cyan, 1.2); innerStroke.Transparency = 1
+    local logo = new("Frame", {Name="SplashLogo", Size=UDim2.fromOffset(48,48), Position=UDim2.new(0.5,0,0,30), AnchorPoint=Vector2.new(0.5,0), BackgroundColor3=Neon.Cyan, BackgroundTransparency=0.02, BorderSizePixel=0, ZIndex=104, Parent=card})
+    corner(logo, UDim.new(0, 14))
+    new("UIGradient", {Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Neon.Cyan),ColorSequenceKeypoint.new(0.5,Neon.Blue),ColorSequenceKeypoint.new(1,Neon.Violet)}),Rotation=25,Parent=logo})
+    new("TextLabel", {Text=Config.Logo,Font=Theme.FontBold,TextSize=27,TextColor3=Color3.fromRGB(255,255,255),BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextTransparency=1,ZIndex=105,Parent=logo})
+    local logoText = logo:FindFirstChildOfClass("TextLabel")
+    local logoScale = new("UIScale", {Scale=0.4, Parent=logo})
+    local cardScale = new("UIScale", {Scale=0.88, Parent=card})
+    local title = new("TextLabel", {Text=Config.Title,Font=Theme.FontBold,TextSize=18,TextColor3=Theme.Text,TextTransparency=1,BackgroundTransparency=1,Position=UDim2.new(0,16,0,108),Size=UDim2.new(1,-32,0,24),ZIndex=105,Parent=card})
+    local subtitle = new("TextLabel", {Text="RIVALS SPECIALIZED  ·  INITIALIZING",Font=Theme.Font,TextSize=9,TextColor3=Color3.fromRGB(147,205,229),TextTransparency=1,BackgroundTransparency=1,Position=UDim2.new(0,16,0,135),Size=UDim2.new(1,-32,0,16),ZIndex=105,Parent=card})
+    local status = new("TextLabel", {Text="LOADING MODULES",Font=Theme.FontMono,TextSize=8,TextColor3=Color3.fromRGB(113,191,216),TextTransparency=1,BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Center,Position=UDim2.new(0,20,1,-48),Size=UDim2.new(1,-40,0,13),ZIndex=105,Parent=card})
+    local progressTrack = new("Frame", {Size=UDim2.new(1,-72,0,4), Position=UDim2.new(0,36,1,-27), BackgroundColor3=Color3.fromRGB(24,39,62), BackgroundTransparency=0.06, BorderSizePixel=0, ZIndex=104, Parent=card})
+    corner(progressTrack, UDim.new(1, 0))
+    local progressFill = new("Frame", {Size=UDim2.fromScale(0,1), BackgroundColor3=Neon.Cyan, BorderSizePixel=0, ZIndex=105, Parent=progressTrack})
+    corner(progressFill, UDim.new(1, 0))
+    new("UIGradient", {Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Neon.Cyan),ColorSequenceKeypoint.new(0.5,Neon.Blue),ColorSequenceKeypoint.new(1,Neon.Magenta)}),Parent=progressFill})
+    local scan = new("Frame", {Name="SplashScanline",Size=UDim2.new(0,2,0,52), Position=UDim2.new(0,12,0,12), BackgroundColor3=Neon.Cyan, BackgroundTransparency=0.25, BorderSizePixel=0, ZIndex=106, Parent=card})
+    corner(scan, UDim.new(1, 0))
+    local introStart = os.clock(); splashConn = nil
+    if RunService then
+        splashConn = RunService.RenderStepped:Connect(function()
+            if not overlay.Parent then if splashConn then splashConn:Disconnect(); splashConn = nil end; return end
+            local t = os.clock() - introStart
+            outerRing.Rotation = (t * 76) % 360
+            innerRing.Rotation = (t * -108) % 360
+            halo.BackgroundTransparency = 0.86 + math.sin(t * 3.2) * 0.045
+            outerRing.Size = UDim2.fromOffset(78 + math.sin(t * 3.5) * 4, 78 + math.sin(t * 3.5) * 4)
+            scan.Position = UDim2.new(0, 12 + ((t * 112) % 344), 0, 12)
+        end)
+    end
+    playTween(overlay, {BackgroundTransparency=0.12}, 0.42, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+    playTween(card, {Position=UDim2.new(0.5,0,0.5,0)}, 0.62, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    playTween(cardScale, {Scale=1}, 0.72, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    playTween(cardStroke, {Transparency=0.12}, 0.35)
+    playTween(outerStroke, {Transparency=0.2}, 0.42)
+    playTween(innerStroke, {Transparency=0.3}, 0.42)
+    task.delay(0.18, function()
+        if not overlay.Parent then return end
+        playTween(logoScale, {Scale=1}, 0.52, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        if logoText then playTween(logoText, {TextTransparency=0}, 0.28) end
+    end)
+    task.delay(0.48, function() if title.Parent then playTween(title, {TextTransparency=0}, 0.35) end end)
+    task.delay(0.68, function()
+        if subtitle.Parent then playTween(subtitle, {TextTransparency=0}, 0.32) end
+        if status.Parent then playTween(status, {TextTransparency=0}, 0.32) end
+    end)
+    task.delay(0.75, function()
+        if progressFill.Parent then playTween(progressFill, {Size=UDim2.fromScale(1,1)}, 1.65, Enum.EasingStyle.Quint, Enum.EasingDirection.Out) end
+    end)
+    task.delay(2.85, function()
+        if not overlay.Parent then return end
+        playTween(card, {BackgroundTransparency=1}, 0.38)
+        playTween(cardStroke, {Transparency=1}, 0.34)
+        playTween(outerStroke, {Transparency=1}, 0.30)
+        playTween(innerStroke, {Transparency=1}, 0.30)
+        playTween(title, {TextTransparency=1}, 0.22)
+        playTween(subtitle, {TextTransparency=1}, 0.22)
+        playTween(status, {TextTransparency=1}, 0.22)
+        playTween(logoText, {TextTransparency=1}, 0.22)
+        playTween(overlay, {BackgroundTransparency=1}, 0.48)
+        playTween(cardScale, {Scale=0.94}, 0.38)
+        task.delay(0.52, function()
+            if introFinished then return end
+            introFinished = true
+            if splashConn then splashConn:Disconnect(); splashConn = nil end
+            if overlay.Parent then overlay:Destroy() end
+            splashOverlay = nil
+            if not closed then
+                pcall(animateShow)
+                task.delay(0.5, function()
+                    if not closed then Notify("MingoHub-Rivals","success","Ready — mode: " .. Rivals.GameMode) end
+                end)
+            else setBlurActive(false, true) end
+        end)
+    end)
+end
+
+local function recoverFromIntroFailure(reason)
+    warn("MingoHub-Rivals: intro failed — opening main. " .. tostring(reason))
+    introFinished = true
+    if splashConn then pcall(function() splashConn:Disconnect() end); splashConn = nil end
+    local overlay = splashOverlay or screen:FindFirstChild("MingoHubIntroSplash")
+    if overlay then pcall(function() overlay:Destroy() end) end
+    splashOverlay = nil
+    setBlurActive(false, true)
+    if closed then return end
+    animState = "idle"
+    main.Visible = false; main.GroupTransparency = 1
+    mainScale.Scale = 0.91 * windowSizeScale
+    main.Position = UDim2.new(0.5,0,0.5,18)
+    local ok = pcall(animateShow)
+    if not ok then
+        main.Visible = true; main.GroupTransparency = 0
+        mainScale.Scale = windowSizeScale; main.Position = UDim2.new(0.5,0,0.5,0)
+        animState = "idle"; setBlurActive(true, true)
+    end
+end
+
+local introOk, introError = pcall(playIntroSplash)
+if not introOk then recoverFromIntroFailure(introError) end
+
+task.delay(6.5, function()
+    if main and main.Parent and not main.Visible and not closed then
+        recoverFromIntroFailure("startup watchdog")
+    end
+end)
